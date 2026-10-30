@@ -2,6 +2,7 @@
 #include "ChatControlSubsystem.h"
 #include "ChatControl.h"
 #include "ChatText.h"
+#include "Twitch/TwitchApi.h"
 #include "FGCharacterPlayer.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
@@ -100,7 +101,8 @@ void UChatControlSubsystem::TickVotes(double Now)
 {
 	if (bVoteActive)
 	{
-		if (Now >= VoteEndTime)
+		// A Twitch poll ends through its callback; the timer is only a safety net
+		if (Now >= VoteEndTime + (bPollMode ? 30.0 : 0.0))
 		{
 			FinishVote(Now);
 		}
@@ -114,7 +116,7 @@ void UChatControlSubsystem::TickVotes(double Now)
 	TArray<FString> Candidates;
 	for (const auto& Pair : Settings.Effects)
 	{
-		if (Pair.Value.bEnabled && Pair.Value.Cost > 0 && Effects.Contains(Pair.Key) && Pair.Key != TEXT("sign"))
+		if (Pair.Value.bEnabled && Pair.Value.bRandomPool && Effects.Contains(Pair.Key))
 		{
 			Candidates.Add(Pair.Key);
 		}
@@ -133,7 +135,36 @@ void UChatControlSubsystem::TickVotes(double Now)
 		Candidates.Remove(VoteOptions.Last());
 	}
 	bVoteActive = true;
-	VoteEndTime = Now + FMath::Max(10.f, Settings.VoteDurationSeconds);
+	VoteEndTime = Now + FMath::Max(15.f, Settings.VoteDurationSeconds);
+	bPollMode = Settings.bTwitchPolls && TwitchApi && TwitchApi->IsReady();
+	PollVotes.Init(0, VoteOptions.Num());
+	if (bPollMode)
+	{
+		TWeakObjectPtr<UChatControlSubsystem> WeakThis = this;
+		TwitchApi->StartPoll(Tr(TEXT("What should happen to the streamer?"), TEXT("Что устроить стримеру?")).ToString(), VoteOptions,
+			FMath::RoundToInt(Settings.VoteDurationSeconds), [WeakThis](const TArray<int32>& Counts, bool bFinished)
+		{
+			if (!WeakThis.IsValid() || !WeakThis->bVoteActive)
+			{
+				return;
+			}
+			if (Counts.Contains(-1))
+			{
+				// Polls need Affiliate/Partner; fall back to chat voting for this round
+				WeakThis->bPollMode = false;
+				WeakThis->Announce(Tr(TEXT("Twitch poll unavailable, vote in chat with !1 / !2 / !3"), TEXT("Опрос Twitch недоступен, голосуйте в чате: !1 / !2 / !3")));
+				return;
+			}
+			WeakThis->PollVotes = Counts;
+			if (bFinished)
+			{
+				WeakThis->FinishVote(FPlatformTime::Seconds());
+			}
+		});
+		Announce(FText::Format(Tr(TEXT("VOTE in the Twitch poll! {0} s to decide"), TEXT("ГОЛОСОВАНИЕ в опросе Twitch! {0} с на выбор")),
+			FText::AsNumber(FMath::RoundToInt(Settings.VoteDurationSeconds))));
+		return;
+	}
 
 	TArray<FString> Parts;
 	for (int32 i = 0; i < VoteOptions.Num(); ++i)
@@ -155,7 +186,12 @@ void UChatControlSubsystem::FinishVote(double Now)
 	{
 		Counts[Pair.Value]++;
 	}
-	if (Votes.Num() == 0)
+	if (bPollMode && PollVotes.Num() == Counts.Num())
+	{
+		Counts = PollVotes;
+	}
+	bPollMode = false;
+	if (FMath::Max(Counts) <= 0)
 	{
 		Announce(Tr(TEXT("Nobody voted. Maybe next time!"), TEXT("Никто не проголосовал. В следующий раз!")));
 		return;
@@ -201,7 +237,7 @@ FText UChatControlSubsystem::GetSessionSummary() const
 
 void UChatControlSubsystem::SaveSessionSummary() const
 {
-	if (SessionEffectCount == 0)
+	if (SessionEffectCount == 0 || !Settings.bSaveSessionFiles)
 	{
 		return;
 	}

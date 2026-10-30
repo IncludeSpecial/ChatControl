@@ -26,6 +26,10 @@ struct FChatEffectSettings
 	/** Random warning delay before the effect hits, seconds (creatures) */
 	UPROPERTY() float DelayMin = 0.f;
 	UPROPERTY() float DelayMax = 0.f;
+	/** Can be picked by votes, Auto-Chaos and the pot */
+	UPROPERTY() bool bRandomPool = true;
+	/** Channel points price of the reward the mod creates for this effect (needs Twitch login). 0 = no reward */
+	UPROPERTY() int32 ChannelPointsCost = 0;
 };
 
 /**
@@ -51,6 +55,27 @@ struct FChatControlSettings
 
 	/** 1 = easy (pricier, fewer creatures), 2 = normal, 3 = hardcore (cheaper, more creatures) */
 	UPROPERTY() int32 Difficulty = 2;
+
+	// --- Twitch account (optional, unlocks follows, auto channel point rewards and native polls) ---
+	/** Client ID of the streamer's own app from dev.twitch.tv/console */
+	UPROPERTY() FString TwitchClientId;
+	/** Tokens saved after logging in with a code at twitch.tv/activate. Never shown in the menu */
+	UPROPERTY() FString TwitchToken;
+	UPROPERTY() FString TwitchRefreshToken;
+	UPROPERTY() bool bFollowsEnabled = true;
+	UPROPERTY() int32 ChipsPerFollow = 50;
+	/** Effect that runs for a new follower, free. Empty = none */
+	UPROPERTY() FString FollowEffect = TEXT("hi");
+	/** Create and handle channel point rewards for effects with ChannelPointsCost > 0 */
+	UPROPERTY() bool bAutoRewards = true;
+	/** Run votes as native Twitch polls instead of !1 / !2 / !3 */
+	UPROPERTY() bool bTwitchPolls = false;
+
+	// --- Notifications ---
+	/** Announce the periodic chip payout in the game chat */
+	UPROPERTY() bool bAnnouncePayouts = true;
+	/** Write a summary file for each session */
+	UPROPERTY() bool bSaveSessionFiles = true;
 
 	// --- YouTube ---
 	/** YouTube Data API v3 key from Google Cloud Console. Empty = YouTube off */
@@ -125,6 +150,8 @@ struct FChatControlSettings
 
 	/** Channel points reward id -> effect id. Unknown reward ids are printed to the game chat so they can be copied here. */
 	UPROPERTY() TMap<FString, FString> RewardEffects;
+	/** effect id -> id of the reward the mod created for it on Twitch */
+	UPROPERTY() TMap<FString, FString> AutoRewardIds;
 
 	/** Effect id -> settings */
 	UPROPERTY() TMap<FString, FChatEffectSettings> Effects;
@@ -132,7 +159,7 @@ struct FChatControlSettings
 	/** Fills Effects with defaults for any effect id that is missing, and new fields of older files */
 	void AddMissingEffectDefaults();
 
-	static constexpr int32 CurrentVersion = 2;
+	static constexpr int32 CurrentVersion = 3;
 
 	float GetPriceMultiplier() const { return Difficulty <= 1 ? 1.5f : Difficulty >= 3 ? 0.6f : 1.f; }
 	float GetCreatureMultiplier() const { return Difficulty <= 1 ? 0.5f : Difficulty >= 3 ? 2.f : 1.f; }

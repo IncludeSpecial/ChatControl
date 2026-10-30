@@ -2,6 +2,7 @@
 #include "ChatControl.h"
 #include "Twitch/TwitchIrcConnector.h"
 #include "YouTube/YouTubeChatConnector.h"
+#include "Twitch/TwitchApi.h"
 #include "ChatControlModConfig.h"
 #include "Configuration/ConfigManager.h"
 #include "FGChatManager.h"
@@ -76,6 +77,38 @@ void UChatControlSubsystem::RestartConnectors()
 	// Destroying the connector stops and joins its thread
 	Twitch.Reset();
 	YouTube.Reset();
+	TwitchApi.Reset();
+	bTwitchApiWasReady = false;
+	if (Settings.bEnabled && !Settings.TwitchClientId.IsEmpty())
+	{
+		TWeakObjectPtr<UChatControlSubsystem> WeakThis = this;
+		TwitchApi = MakeShared<FTwitchApi>(Settings.TwitchClientId, Settings.TwitchToken, Settings.TwitchRefreshToken, IncomingEvents,
+			[WeakThis](const FString& Access, const FString& Refresh)
+			{
+				if (!WeakThis.IsValid())
+				{
+					return;
+				}
+				WeakThis->Settings.TwitchToken = Access;
+				WeakThis->Settings.TwitchRefreshToken = Refresh;
+				WeakThis->Settings.Save();
+				if (Access.IsEmpty())
+				{
+					WeakThis->Announce(Tr(TEXT("Twitch: login expired, a new code is coming"), TEXT("Twitch: вход истёк, сейчас придёт новый код")));
+				}
+			},
+			[WeakThis](const FString& Code, const FString& Url)
+			{
+				if (!WeakThis.IsValid())
+				{
+					return;
+				}
+				WeakThis->Announce(FText::Format(Tr(TEXT("Twitch login: open {0} and enter the code {1}"), TEXT("Вход в Twitch: открой {0} и введи код {1}")),
+					FText::FromString(Url), FText::FromString(Code)));
+				// The activation page accepts the code in the link, so usually one click is enough
+				FPlatformProcess::LaunchURL(*(Url + TEXT("?device-code=") + Code), nullptr, nullptr);
+			});
+	}
 	if (Settings.bEnabled && !Settings.YouTubeApiKey.IsEmpty() && !Settings.YouTubeChannel.IsEmpty())
 	{
 		YouTube = MakeShared<FYouTubeChatConnector>(Settings.YouTubeApiKey, Settings.YouTubeChannel, Settings.YouTubePollSeconds, IncomingEvents);
@@ -97,6 +130,7 @@ void UChatControlSubsystem::TickConfig(double Now)
 
 	const FString OldChannel = Settings.TwitchChannel;
 	const FString OldYouTube = Settings.YouTubeApiKey + Settings.YouTubeChannel;
+	const FString OldClientId = Settings.TwitchClientId;
 	const bool bWasEnabled = Settings.bEnabled;
 	if (!UChatControlModConfig::ApplyTo(ConfigManager, Settings))
 	{
@@ -104,11 +138,69 @@ void UChatControlSubsystem::TickConfig(double Now)
 	}
 	Settings.Save();
 	ChatText::SetLanguage(Settings.Language);
-	if (Settings.TwitchChannel != OldChannel || Settings.bEnabled != bWasEnabled || Settings.YouTubeApiKey + Settings.YouTubeChannel != OldYouTube)
+	if (Settings.TwitchChannel != OldChannel || Settings.bEnabled != bWasEnabled || Settings.YouTubeApiKey + Settings.YouTubeChannel != OldYouTube || Settings.TwitchClientId != OldClientId)
 	{
 		RestartConnectors();
 	}
 	UE_LOG(LogChatControl, Log, TEXT("Settings changed in the mod config menu"));
+	RewardSyncTime = Now + 5.0;
+}
+
+void UChatControlSubsystem::TickTwitchApi(double Now)
+{
+	if (!TwitchApi)
+	{
+		return;
+	}
+	TwitchApi->SetFollowsEnabled(Settings.bFollowsEnabled);
+	TwitchApi->Tick(Now);
+	const bool bReady = TwitchApi->IsReady();
+	if (bReady && !bTwitchApiWasReady)
+	{
+		Announce(FText::Format(Tr(TEXT("Twitch: logged in as {0}"), TEXT("Twitch: вход выполнен, {0}")), FText::FromString(TwitchApi->GetLogin())));
+		RewardSyncTime = Now;
+	}
+	bTwitchApiWasReady = bReady;
+	if (bReady && RewardSyncTime > 0.0 && Now >= RewardSyncTime)
+	{
+		RewardSyncTime = 0.0;
+		SyncTwitchRewards();
+	}
+}
+
+void UChatControlSubsystem::SyncTwitchRewards()
+{
+	TMap<FString, TPair<FString, int32>> Wanted;
+	if (Settings.bAutoRewards)
+	{
+		for (const auto& Pair : Settings.Effects)
+		{
+			if (Pair.Value.bEnabled && Pair.Value.ChannelPointsCost > 0 && Effects.Contains(Pair.Key))
+			{
+				Wanted.Add(Pair.Key, { FString::Printf(TEXT("ChatControl: !%s"), *Pair.Key), Pair.Value.ChannelPointsCost });
+			}
+		}
+	}
+	TWeakObjectPtr<UChatControlSubsystem> WeakThis = this;
+	TwitchApi->SyncRewards(Wanted, Settings.AutoRewardIds, [WeakThis](const TMap<FString, FString>& Created)
+	{
+		if (!WeakThis.IsValid())
+		{
+			return;
+		}
+		FChatControlSettings& S = WeakThis->Settings;
+		for (const auto& Pair : S.AutoRewardIds)
+		{
+			S.RewardEffects.Remove(Pair.Value);
+		}
+		S.AutoRewardIds = Created;
+		for (const auto& Pair : Created)
+		{
+			S.RewardEffects.Add(Pair.Value, Pair.Key);
+		}
+		S.Save();
+		WeakThis->Announce(FText::Format(Tr(TEXT("Twitch: {0} channel point rewards are ready"), TEXT("Twitch: награды за баллы канала готовы ({0})")), FText::AsNumber(Created.Num())));
+	});
 }
 
 void UChatControlSubsystem::RunDelayed(float Delay, TFunction<void()> Action)
@@ -152,6 +244,7 @@ void UChatControlSubsystem::Tick(float DeltaTime)
 	{
 		YouTube->Tick(Now);
 	}
+	TickTwitchApi(Now);
 
 	FChatEvent Event;
 	while (IncomingEvents.Dequeue(Event))
@@ -247,6 +340,17 @@ void UChatControlSubsystem::HandleEvent(const FChatEvent& Event)
 		Economy.AddChips(Key, Event.DisplayName, Chips);
 		Announce(FText::Format(Tr(TEXT("{0} sent a Super Chat and got {1} chips!"), TEXT("{0} отправил(а) Super Chat и получил(а) {1} чипов!")), Name, FText::AsNumber(Chips)));
 		HandleCommand(Event);
+		break;
+	}
+
+	case EChatEventType::Follow:
+	{
+		Economy.AddChips(Key, Event.DisplayName, Settings.ChipsPerFollow);
+		Announce(FText::Format(Tr(TEXT("{0} followed and got {1} chips!"), TEXT("{0} фолловит канал и получает {1} чипов!")), Name, FText::AsNumber(Settings.ChipsPerFollow)));
+		if (!Settings.FollowEffect.IsEmpty() && Effects.Contains(Settings.FollowEffect))
+		{
+			RequestEffect(Settings.FollowEffect, Key, Event.DisplayName, true);
+		}
 		break;
 	}
 
@@ -525,7 +629,7 @@ void UChatControlSubsystem::TickEconomy(double Now)
 	{
 		NextChipsPayout = Now + Settings.ChipsIntervalSeconds;
 		const int32 Paid = Economy.PayActiveViewers(Now, Settings.ActiveWindowSeconds, Settings.ChipsPerInterval);
-		if (Paid > 0)
+		if (Paid > 0 && Settings.bAnnouncePayouts)
 		{
 			Announce(FText::Format(Tr(TEXT("{0} active viewers received {1} chips"), TEXT("Активные зрители ({0}) получили по {1} чипов")), FText::AsNumber(Paid), FText::AsNumber(Settings.ChipsPerInterval)));
 		}
@@ -586,7 +690,7 @@ void UChatControlSubsystem::TickAutoChaos(double Now)
 	TArray<FString> Candidates;
 	for (const auto& Pair : Settings.Effects)
 	{
-		if (Pair.Value.bEnabled && Pair.Value.Cost > 0 && Effects.Contains(Pair.Key))
+		if (Pair.Value.bEnabled && Pair.Value.bRandomPool && Effects.Contains(Pair.Key))
 		{
 			Candidates.Add(Pair.Key);
 		}

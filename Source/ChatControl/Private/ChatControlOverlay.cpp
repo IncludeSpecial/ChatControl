@@ -87,6 +87,10 @@ FString UChatControlSubsystem::BuildOverlayJson() const
 		{
 			Count += Pair.Value == i ? 1 : 0;
 		}
+		if (bPollMode && PollVotes.IsValidIndex(i))
+		{
+			Count = PollVotes[i];
+		}
 		TSharedRef<FJsonObject> Option = MakeShared<FJsonObject>();
 		Option->SetStringField(TEXT("effect"), VoteOptions[i]);
 		Option->SetNumberField(TEXT("votes"), Count);

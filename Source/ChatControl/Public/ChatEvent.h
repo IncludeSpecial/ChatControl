@@ -11,6 +11,7 @@ enum class EChatEventType : uint8
 	GiftSubs,      // one or many gifted subs
 	Raid,
 	SuperChat,     // YouTube Super Chat / Super Sticker, Amount in whole currency units
+	Follow,        // new Twitch follower (needs Twitch login)
 };
 
 /** Platform-independent chat event. Produced by connectors on a worker thread, consumed on the game thread. */

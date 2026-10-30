@@ -23,7 +23,7 @@ static FChatEffectSettings MakeEffect(int32 Cost, float GlobalCooldown, float Vi
 void FChatControlSettings::AddMissingEffectDefaults()
 {
 	//                                    cost  global  viewer  dur   chaos strength amount delay
-	const TPair<const TCHAR*, FChatEffectSettings> Defaults[] = {
+	TPair<const TCHAR*, FChatEffectSettings> Defaults[] = {
 		// Free tier
 		{ TEXT("hi"),       MakeEffect(0,   5.f,   120.f, 0.f,  0) },
 		{ TEXT("gift"),     MakeEffect(0,   15.f,  300.f, 0.f,  0, 0.5f) },
@@ -55,14 +55,27 @@ void FChatControlSettings::AddMissingEffectDefaults()
 		{ TEXT("ambush"),   MakeEffect(80,  60.f,  120.f, 0.f,  2, 0.f, 3, 3.f, 5.f) },
 		{ TEXT("boss"),     MakeEffect(300, 180.f, 300.f, 0.f,  4, 0.f, 1, 3.f, 5.f) },
 	};
+	// Free and personal effects make no sense as a random pick; channel point prices start at cost x 10
+	const TSet<FString> NotRandom = { TEXT("hi"), TEXT("gift"), TEXT("sign"), TEXT("pet"), TEXT("day") };
+	for (auto& Pair : Defaults)
+	{
+		Pair.Value.bRandomPool = !NotRandom.Contains(Pair.Key);
+		Pair.Value.ChannelPointsCost = Pair.Value.Cost > 0 && Pair.Value.ChaosWeight > 0 ? Pair.Value.Cost * 10 : 0;
+	}
 	for (const auto& Pair : Defaults)
 	{
 		FChatEffectSettings* Existing = Effects.Find(Pair.Key);
 		if (!Existing)
 		{
 			Effects.Add(Pair.Key, Pair.Value);
+			continue;
 		}
-		else if (SettingsVersion < 2)
+		if (Existing && SettingsVersion < 3)
+		{
+			Existing->bRandomPool = Pair.Value.bRandomPool;
+			Existing->ChannelPointsCost = Pair.Value.ChannelPointsCost;
+		}
+		if (Existing && SettingsVersion < 2)
 		{
 			// Fields added in version 2 are missing from older files and would load as 0
 			Existing->Strength = Pair.Value.Strength;

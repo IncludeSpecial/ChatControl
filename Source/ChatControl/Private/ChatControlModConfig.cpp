@@ -214,6 +214,25 @@ void UChatControlModConfig::Register(UConfigManager* ConfigManager, const FChatC
 		Tr(TEXT("1 = easy: prices x1.5, half the creatures. 2 = normal. 3 = hardcore: prices x0.6, double creatures."),
 		   TEXT("1 = лёгкая: цены x1.5, существ вдвое меньше. 2 = обычная. 3 = хардкор: цены x0.6, существ вдвое больше.")));
 
+	// --- Twitch account ---
+	UConfigPropertySection* TwitchAccount = AddSection(Root, TEXT("TwitchAccount"), Tr(TEXT("Twitch login (optional)"), TEXT("Вход в Twitch (необязательно)")));
+	AddString(TwitchAccount, TEXT("ClientId"), Defaults.TwitchClientId,
+		Tr(TEXT("Client ID"), TEXT("Client ID")),
+		Tr(TEXT("From your app at dev.twitch.tv/console (type Public). After entering it the mod shows a code to confirm at twitch.tv/activate."),
+		   TEXT("Из твоего приложения на dev.twitch.tv/console (тип Public). После ввода мод покажет код для подтверждения на twitch.tv/activate.")));
+	AddBool(TwitchAccount, TEXT("Follows"), Defaults.bFollowsEnabled, Tr(TEXT("React to follows"), TEXT("Реагировать на фолловы")));
+	AddInt(TwitchAccount, TEXT("ChipsPerFollow"), Defaults.ChipsPerFollow, Tr(TEXT("Chips per follow"), TEXT("Чипов за фоллов")));
+	AddString(TwitchAccount, TEXT("FollowEffect"), Defaults.FollowEffect,
+		Tr(TEXT("Effect for a follow"), TEXT("Эффект за фоллов")),
+		Tr(TEXT("Effect name, e.g. hi or gift. Empty = none"), TEXT("Название эффекта, например hi или gift. Пусто = без эффекта")));
+	AddBool(TwitchAccount, TEXT("AutoRewards"), Defaults.bAutoRewards,
+		Tr(TEXT("Create channel point rewards"), TEXT("Создавать награды за баллы")),
+		Tr(TEXT("The mod creates a reward for every effect with a channel points price (Affiliate/Partner only)"),
+		   TEXT("Мод создаст награду для каждого эффекта с ценой в баллах (только для компаньонов и партнёров)")));
+	AddBool(TwitchAccount, TEXT("Polls"), Defaults.bTwitchPolls,
+		Tr(TEXT("Votes as Twitch polls"), TEXT("Голосования через опросы Twitch")),
+		Tr(TEXT("Instead of !1 / !2 / !3 (Affiliate/Partner only)"), TEXT("Вместо !1 / !2 / !3 (только для компаньонов и партнёров)")));
+
 	// --- YouTube ---
 	UConfigPropertySection* YouTube = AddSection(Root, TEXT("YouTube"), (Tr(TEXT("YouTube chat"), TEXT("Чат YouTube"))));
 	AddString(YouTube, TEXT("ApiKey"), Defaults.YouTubeApiKey,
@@ -238,6 +257,11 @@ void UChatControlModConfig::Register(UConfigManager* ConfigManager, const FChatC
 		Tr(TEXT("Given to every viewer who chatted recently, each payout"), TEXT("Каждому, кто недавно писал в чат, при каждом начислении")));
 	AddInt(Economy, TEXT("IntervalMinutes"), FMath::RoundToInt(Defaults.ChipsIntervalSeconds / 60.f),
 		Tr(TEXT("Payout every (min)"), TEXT("Начислять каждые (мин)")));
+	AddInt(Economy, TEXT("ActiveWindowMinutes"), FMath::RoundToInt(Defaults.ActiveWindowSeconds / 60.f),
+		Tr(TEXT("Viewer counts as active for (min)"), TEXT("Зритель активен после сообщения (мин)")),
+		Tr(TEXT("Only viewers who wrote within this time get payouts and raise prices"), TEXT("Только написавшие за это время получают чипы и влияют на цены")));
+	AddBool(Economy, TEXT("AnnouncePayouts"), Defaults.bAnnouncePayouts,
+		Tr(TEXT("Announce payouts in game chat"), TEXT("Сообщать о начислении в чат игры")));
 	AddInt(Economy, TEXT("FirstMessageBonus"), Defaults.FirstMessageBonus,
 		Tr(TEXT("First message bonus"), TEXT("Бонус за первое сообщение")));
 	AddInt(Economy, TEXT("ChipsPerBit"), Defaults.ChipsPerBit,
@@ -283,6 +307,13 @@ void UChatControlModConfig::Register(UConfigManager* ConfigManager, const FChatC
 		{
 			AddInt(Row, TEXT("Amount"), Effect->Amount, Tr(TEXT("Count"), TEXT("Количество")));
 		}
+		AddBool(Row, TEXT("RandomPool"), Effect->bRandomPool,
+			Tr(TEXT("Random"), TEXT("В случайных")),
+			Tr(TEXT("Can be picked by votes, Auto-Chaos and the pot"), TEXT("Может выпасть в голосовании, автохаосе и копилке")));
+		AddInt(Row, TEXT("ChannelPoints"), Effect->ChannelPointsCost,
+			Tr(TEXT("Channel points"), TEXT("Баллы канала")),
+			Tr(TEXT("Price of the reward the mod creates on Twitch (needs Twitch login). 0 = no reward"),
+			   TEXT("Цена награды, которую мод создаст на Twitch (нужен вход в Twitch). 0 = без награды")));
 		if (Effect->DelayMax > 0.f || Effect->Amount > 0)
 		{
 			AddFloat(Row, TEXT("DelayMin"), Effect->DelayMin,
@@ -368,6 +399,18 @@ void UChatControlModConfig::Register(UConfigManager* ConfigManager, const FChatC
 		Tr(TEXT("Ignored users"), TEXT("Игнорируемые пользователи")),
 		Tr(TEXT("Comma-separated chat logins, e.g. bots"), TEXT("Логины через запятую, например боты")));
 
+	TArray<FString> RewardPairs;
+	for (const auto& Pair : Defaults.RewardEffects)
+	{
+		RewardPairs.Add(Pair.Key + TEXT("=") + Pair.Value);
+	}
+	AddString(Advanced, TEXT("RewardEffects"), FString::Join(RewardPairs, TEXT(", ")),
+		Tr(TEXT("Manual channel point rewards"), TEXT("Свои награды за баллы")),
+		Tr(TEXT("For rewards you made yourself (with text input): rewardId=effect, separated by commas. The mod prints unknown ids to the game chat."),
+		   TEXT("Для наград, созданных вручную (с вводом текста): idНаграды=эффект через запятую. Неизвестные ID мод пишет в чат игры.")));
+	AddBool(Advanced, TEXT("SessionFiles"), Defaults.bSaveSessionFiles,
+		Tr(TEXT("Save session summaries"), TEXT("Сохранять итоги сессий")));
+
 	UConfigPropertySection* Limits = AddSection(Advanced, TEXT("EffectLimits"), Tr(TEXT("Effect limits"), TEXT("Ограничения эффектов")));
 	for (const FEffectLabel& Label : EffectLabels)
 	{
@@ -403,6 +446,25 @@ bool UChatControlModConfig::ApplyTo(UConfigManager* ConfigManager, FChatControlS
 	bChanged |= Read<UConfigPropertyString>(Main, TEXT("Language"), Settings.Language);
 	bChanged |= Read<UConfigPropertyInteger>(Main, TEXT("Difficulty"), Settings.Difficulty);
 
+	const UConfigPropertySection* TwitchAccount = GetSection(Root, TEXT("TwitchAccount"));
+	const FString OldClientId = Settings.TwitchClientId;
+	if (Read<UConfigPropertyString>(TwitchAccount, TEXT("ClientId"), Settings.TwitchClientId))
+	{
+		Settings.TwitchClientId.TrimStartAndEndInline();
+		if (Settings.TwitchClientId != OldClientId)
+		{
+			// Tokens belong to the old app
+			Settings.TwitchToken.Empty();
+			Settings.TwitchRefreshToken.Empty();
+		}
+		bChanged = true;
+	}
+	bChanged |= Read<UConfigPropertyBool>(TwitchAccount, TEXT("Follows"), Settings.bFollowsEnabled);
+	bChanged |= Read<UConfigPropertyInteger>(TwitchAccount, TEXT("ChipsPerFollow"), Settings.ChipsPerFollow);
+	bChanged |= Read<UConfigPropertyString>(TwitchAccount, TEXT("FollowEffect"), Settings.FollowEffect);
+	bChanged |= Read<UConfigPropertyBool>(TwitchAccount, TEXT("AutoRewards"), Settings.bAutoRewards);
+	bChanged |= Read<UConfigPropertyBool>(TwitchAccount, TEXT("Polls"), Settings.bTwitchPolls);
+
 	const UConfigPropertySection* YouTube = GetSection(Root, TEXT("YouTube"));
 	bChanged |= Read<UConfigPropertyString>(YouTube, TEXT("ApiKey"), Settings.YouTubeApiKey);
 	bChanged |= Read<UConfigPropertyString>(YouTube, TEXT("Channel"), Settings.YouTubeChannel);
@@ -413,6 +475,8 @@ bool UChatControlModConfig::ApplyTo(UConfigManager* ConfigManager, FChatControlS
 	bChanged |= Read<UConfigPropertyInteger>(Economy, TEXT("ChipsPerInterval"), Settings.ChipsPerInterval);
 	bChanged |= ReadSeconds(Economy, TEXT("IntervalMinutes"), Settings.ChipsIntervalSeconds, 60.f, 60.f);
 	bChanged |= Read<UConfigPropertyInteger>(Economy, TEXT("FirstMessageBonus"), Settings.FirstMessageBonus);
+	bChanged |= ReadSeconds(Economy, TEXT("ActiveWindowMinutes"), Settings.ActiveWindowSeconds, 60.f, 60.f);
+	bChanged |= Read<UConfigPropertyBool>(Economy, TEXT("AnnouncePayouts"), Settings.bAnnouncePayouts);
 	bChanged |= Read<UConfigPropertyInteger>(Economy, TEXT("ChipsPerBit"), Settings.ChipsPerBit);
 	bChanged |= Read<UConfigPropertyInteger>(Economy, TEXT("ChipsPerSub"), Settings.ChipsPerSub);
 
@@ -457,6 +521,37 @@ bool UChatControlModConfig::ApplyTo(UConfigManager* ConfigManager, FChatControlS
 	bChanged |= Read<UConfigPropertyFloat>(Advanced, TEXT("SpawnDistanceMin"), Settings.SpawnDistanceMin);
 	bChanged |= Read<UConfigPropertyFloat>(Advanced, TEXT("SpawnDistanceMax"), Settings.SpawnDistanceMax);
 	bChanged |= ReadSeconds(Advanced, TEXT("LifeSpan"), Settings.CreatureLifeSpanSeconds, 1.f, 10.f);
+	bChanged |= Read<UConfigPropertyBool>(Advanced, TEXT("SessionFiles"), Settings.bSaveSessionFiles);
+	TArray<FString> RewardPairs;
+	for (const auto& Pair : Settings.RewardEffects)
+	{
+		RewardPairs.Add(Pair.Key + TEXT("=") + Pair.Value);
+	}
+	FString Rewards = FString::Join(RewardPairs, TEXT(", "));
+	if (Read<UConfigPropertyString>(Advanced, TEXT("RewardEffects"), Rewards))
+	{
+		TArray<FString> Parts;
+		Rewards.ParseIntoArray(Parts, TEXT(","));
+		// Keep rewards the mod created itself; replace the manual ones
+		TMap<FString, FString> Kept;
+		for (const auto& Pair : Settings.AutoRewardIds)
+		{
+			if (const FString* Effect = Settings.RewardEffects.Find(Pair.Value))
+			{
+				Kept.Add(Pair.Value, *Effect);
+			}
+		}
+		Settings.RewardEffects = Kept;
+		for (const FString& Part : Parts)
+		{
+			FString Id, Effect;
+			if (Part.Split(TEXT("="), &Id, &Effect) && !Id.TrimStartAndEnd().IsEmpty())
+			{
+				Settings.RewardEffects.Add(Id.TrimStartAndEnd(), Effect.TrimStartAndEnd().ToLower());
+			}
+		}
+		bChanged = true;
+	}
 	FString Ignored = FString::Join(Settings.IgnoredUsers, TEXT(", "));
 	if (Read<UConfigPropertyString>(Advanced, TEXT("IgnoredUsers"), Ignored))
 	{
@@ -491,6 +586,8 @@ bool UChatControlModConfig::ApplyTo(UConfigManager* ConfigManager, FChatControlS
 			bChanged |= Read<UConfigPropertyInteger>(Row, TEXT("Amount"), Effect->Amount);
 			bChanged |= Read<UConfigPropertyFloat>(Row, TEXT("DelayMin"), Effect->DelayMin);
 			bChanged |= Read<UConfigPropertyFloat>(Row, TEXT("DelayMax"), Effect->DelayMax);
+			bChanged |= Read<UConfigPropertyBool>(Row, TEXT("RandomPool"), Effect->bRandomPool);
+			bChanged |= Read<UConfigPropertyInteger>(Row, TEXT("ChannelPoints"), Effect->ChannelPointsCost);
 		}
 		if (const UConfigPropertySection* Row = FindPath(Root, FString::Printf(TEXT("Advanced/EffectLimits/%s"), Label.Id)))
 		{

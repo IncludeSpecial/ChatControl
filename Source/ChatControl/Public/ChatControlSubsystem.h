@@ -96,6 +96,9 @@ private:
 	bool ExecuteEffect(const FChatEffect& Effect, const FString& ViewerName, const FString& Args = FString());
 	/** Keeps name tags readable by turning them to the camera */
 	void TickNameTags();
+	void TickTwitchApi(double Now);
+	/** Creates/updates/deletes the channel point rewards the mod owns */
+	void SyncTwitchRewards();
 
 	// Chat games (ChatControlGames.cpp)
 	/** Votes, pot, top and stats commands. Returns true if the command was handled. */
@@ -135,6 +138,13 @@ private:
 	TQueue<FChatEvent, EQueueMode::Mpsc> IncomingEvents;
 	TSharedPtr<FTwitchIrcConnector> Twitch;
 	TSharedPtr<class FYouTubeChatConnector> YouTube;
+	TSharedPtr<class FTwitchApi> TwitchApi;
+	bool bTwitchApiWasReady = false;
+	/** 0 = no sync pending */
+	double RewardSyncTime = 0.0;
+	/** Votes run as a native Twitch poll; counts come from Twitch */
+	bool bPollMode = false;
+	TArray<int32> PollVotes;
 
 	TArray<FPendingChaos> ChaosQueue;
 	/** (time, weight) of harmful effects executed within the last minute */
