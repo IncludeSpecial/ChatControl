@@ -109,6 +109,8 @@ struct FChatControlSettings
 	/** A viewer's first message in a session shows their name next to the player */
 	UPROPERTY() bool bWelcomeEnabled = true;
 	UPROPERTY() float WelcomeSeconds = 8.f;
+	/** FICSMAS fireworks over the greeting */
+	UPROPERTY() bool bWelcomeFireworks = true;
 	/** Chips for !daily, once per calendar day; 0 = off */
 	UPROPERTY() int32 DailyChips = 50;
 	/** Ranks by lifetime chips spent */

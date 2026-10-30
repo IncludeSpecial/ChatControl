@@ -8,6 +8,7 @@
 #include "Buildables/FGBuildableFactory.h"
 #include "Components/WidgetComponent.h"
 #include "FGVehicle.h"
+#include "FGProjectile.h"
 #include "EngineUtils.h"
 #include "JsonObjectConverter.h"
 #include "Misc/FileHelper.h"
@@ -35,6 +36,34 @@ namespace
 		}
 		const AFGBuildable* Building = Cast<AFGBuildable>(Actor);
 		return Building ? Building->mDisplayName : FText::FromString(Actor->GetName());
+	}
+
+	const TCHAR* FireworkPool[] = {
+		TEXT("/Game/FactoryGame/Events/Christmas/Fireworks/BP_FireWorksProjectile_01.BP_FireWorksProjectile_01_C"),
+		TEXT("/Game/FactoryGame/Events/Christmas/Fireworks/BP_FireWorksProjectile_02.BP_FireWorksProjectile_02_C"),
+		TEXT("/Game/FactoryGame/Events/Christmas/Fireworks/BP_FireworksProjectile_03.BP_FireworksProjectile_03_C"),
+	};
+
+	/** Shoots a FICSMAS firework straight up; it bursts when its short lifespan runs out */
+	void LaunchFirework(UWorld* World, const FVector& Location)
+	{
+		UClass* Class = LoadClass<AFGProjectile>(nullptr, FireworkPool[FMath::RandRange(0, UE_ARRAY_COUNT(FireworkPool) - 1)]);
+		if (!Class)
+		{
+			UE_LOG(LogChatControl, Warning, TEXT("Firework class failed to load"));
+			return;
+		}
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		const FVector Velocity = FVector(FMath::FRandRange(-150.f, 150.f), FMath::FRandRange(-150.f, 150.f), 2200.f);
+		AFGProjectile* Firework = World->SpawnActor<AFGProjectile>(Class, Location, Velocity.Rotation(), Params);
+		if (!Firework)
+		{
+			UE_LOG(LogChatControl, Warning, TEXT("Firework failed to spawn"));
+			return;
+		}
+		Firework->SetInitialVelocity(Velocity);
+		Firework->SetLifeSpan(FMath::FRandRange(0.9f, 1.3f));
 	}
 
 	/** Height of the name tag above a machine: just over its top */
@@ -75,6 +104,14 @@ void UChatControlSubsystem::WelcomeViewer(const FString& ViewerName)
 	AttachNameTag(Greeting, NameText, GetNameColor(ViewerName, WelcomeColor), NameHeight);
 	AttachNameTag(Greeting, Tr(TEXT("o7 joined the stream"), TEXT("o7 заходит на стрим")).ToString(), WelcomeColor, -40.f);
 	Greeting->SetLifeSpan(FMath::Max(2.f, Settings.WelcomeSeconds));
+	if (Settings.bWelcomeFireworks)
+	{
+		const FVector Base = Location - FVector(0, 0, 150.f);
+		LaunchFirework(World, Base);
+		TWeakObjectPtr<UWorld> WeakWorld = World;
+		RunDelayed(0.4f, [WeakWorld, Base] { if (WeakWorld.IsValid()) { LaunchFirework(WeakWorld.Get(), Base + FVector(0, 120, 0)); } });
+		RunDelayed(0.8f, [WeakWorld, Base] { if (WeakWorld.IsValid()) { LaunchFirework(WeakWorld.Get(), Base - FVector(0, 120, 0)); } });
+	}
 	TrackSpawned(Greeting);
 }
 

@@ -382,6 +382,7 @@ void UChatControlModConfig::Register(UConfigManager* ConfigManager, const FChatC
 		Tr(TEXT("Greet new chatters in the world"), TEXT("Приветствие в мире при первом сообщении")),
 		Tr(TEXT("The viewer's name appears next to you for a few seconds"), TEXT("Ник зрителя на несколько секунд появляется рядом с тобой")));
 	AddInt(Viewers, TEXT("WelcomeSeconds"), FMath::RoundToInt(Defaults.WelcomeSeconds), Tr(TEXT("Greeting stays for (s)"), TEXT("Приветствие висит (с)")));
+	AddBool(Viewers, TEXT("WelcomeFireworks"), Defaults.bWelcomeFireworks, Tr(TEXT("Fireworks with the greeting"), TEXT("Фейерверк при приветствии")));
 	AddInt(Viewers, TEXT("DailyChips"), Defaults.DailyChips,
 		Tr(TEXT("!daily bonus (chips)"), TEXT("Бонус !daily (чипы)")),
 		Tr(TEXT("Once per day per viewer. 0 = off"), TEXT("Раз в сутки на зрителя. 0 = выключено")));
@@ -550,6 +551,7 @@ bool UChatControlModConfig::ApplyTo(UConfigManager* ConfigManager, FChatControlS
 	const UConfigPropertySection* Viewers = GetSection(Root, TEXT("Viewers"));
 	bChanged |= Read<UConfigPropertyBool>(Viewers, TEXT("Welcome"), Settings.bWelcomeEnabled);
 	bChanged |= ReadSeconds(Viewers, TEXT("WelcomeSeconds"), Settings.WelcomeSeconds, 1.f, 2.f);
+	bChanged |= Read<UConfigPropertyBool>(Viewers, TEXT("WelcomeFireworks"), Settings.bWelcomeFireworks);
 	bChanged |= Read<UConfigPropertyInteger>(Viewers, TEXT("DailyChips"), Settings.DailyChips);
 	bChanged |= Read<UConfigPropertyBool>(Viewers, TEXT("Ranks"), Settings.bRanksEnabled);
 	bChanged |= Read<UConfigPropertyString>(Viewers, TEXT("RankList"), Settings.Ranks);
