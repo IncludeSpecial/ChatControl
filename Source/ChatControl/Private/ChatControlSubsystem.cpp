@@ -12,7 +12,9 @@
 #include "EngineUtils.h"
 #include "GameFramework/GameStateBase.h"
 #include "Buildables/FGBuildableTradingPost.h"
-#include "Components/TextRenderComponent.h"
+#include "Components/WidgetComponent.h"
+#include "Widgets/Text/STextBlock.h"
+#include "Styling/CoreStyle.h"
 #include "ChatText.h"
 
 using ChatText::Tr;
@@ -579,6 +581,10 @@ void UChatControlSubsystem::HandleTestCommand(const FChatEvent& Event, const FSt
 		Fake.Amount = Amount > 0 ? Amount : 10;
 		HandleEvent(Fake);
 	}
+	else if (What == TEXT("welcome"))
+	{
+		WelcomeViewer(Event.DisplayName);
+	}
 	else if (What == TEXT("autochaos"))
 	{
 		LastTriggerTime = -Settings.AutoChaosIdleSeconds;
@@ -589,7 +595,7 @@ void UChatControlSubsystem::HandleTestCommand(const FChatEvent& Event, const FSt
 	}
 	else
 	{
-		Announce(Tr(TEXT("[test] chips [N], bits [N], sub, gifts [N], raid [N], autochaos, or an effect name"), TEXT("[тест] chips [N], bits [N], sub, gifts [N], raid [N], autochaos или название эффекта")));
+		Announce(Tr(TEXT("[test] chips [N], bits [N], sub, gifts [N], raid [N], welcome, autochaos, or an effect name"), TEXT("[тест] chips [N], bits [N], sub, gifts [N], raid [N], welcome, autochaos или название эффекта")));
 	}
 }
 
@@ -793,22 +799,31 @@ bool UChatControlSubsystem::IsInSafeZone() const
 		FVector::Dist2D(Player->GetActorLocation(), Hub) < Settings.SafeZoneRadius * 100.f;
 }
 
-UTextRenderComponent* UChatControlSubsystem::AttachNameTag(AActor* Target, const FString& Text, const FColor& Color, float Height)
+UWidgetComponent* UChatControlSubsystem::AttachNameTag(AActor* Target, const FString& Text, const FColor& Color, float Height)
 {
 	if (!Target || !Target->GetRootComponent())
 	{
 		return nullptr;
 	}
-	UTextRenderComponent* Tag = NewObject<UTextRenderComponent>(Target);
+	// A Slate text in the world instead of a TextRender: the engine's TextRender font has no Cyrillic glyphs
+	FSlateFontInfo Font = FCoreStyle::GetDefaultFontStyle(TEXT("Bold"), 40);
+	Font.OutlineSettings.OutlineSize = 3;
+	Font.OutlineSettings.OutlineColor = FLinearColor(0.f, 0.f, 0.f, 0.85f);
+	UWidgetComponent* Tag = NewObject<UWidgetComponent>(Target);
 	Tag->SetupAttachment(Target->GetRootComponent());
 	Tag->SetRelativeLocation(FVector(0, 0, Height));
-	Tag->SetHorizontalAlignment(EHTA_Center);
-	Tag->SetVerticalAlignment(EVRTA_TextCenter);
-	Tag->SetWorldSize(40.f);
-	Tag->SetTextRenderColor(Color);
-	Tag->SetText(FText::FromString(Text));
+	Tag->SetWidgetSpace(EWidgetSpace::World);
+	Tag->SetDrawAtDesiredSize(true);
+	Tag->SetPivot(FVector2D(0.5f, 0.5f));
+	Tag->SetTwoSided(true);
+	Tag->SetBlendMode(EWidgetBlendMode::Transparent);
 	Tag->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Tag->SetCastShadow(false);
+	Tag->SetSlateWidget(SNew(STextBlock)
+		.Text(FText::FromString(Text.Replace(TEXT("<br>"), LINE_TERMINATOR)))
+		.Font(Font)
+		.ColorAndOpacity(FLinearColor(Color))
+		.Justification(ETextJustify::Center));
 	Tag->RegisterComponent();
 	NameTags.Add(Tag);
 	return Tag;
@@ -827,10 +842,10 @@ void UChatControlSubsystem::TickNameTags()
 		return;
 	}
 	const FVector Camera = Controller->PlayerCameraManager->GetCameraLocation();
-	NameTags.RemoveAll([](const TWeakObjectPtr<UTextRenderComponent>& Tag) { return !Tag.IsValid(); });
-	for (const TWeakObjectPtr<UTextRenderComponent>& Tag : NameTags)
+	NameTags.RemoveAll([](const TWeakObjectPtr<UWidgetComponent>& Tag) { return !Tag.IsValid(); });
+	for (const TWeakObjectPtr<UWidgetComponent>& Tag : NameTags)
 	{
-		// Text faces +X, so point +X at the camera (yaw only, stays upright)
+		// The widget faces +X, so point +X at the camera (yaw only, stays upright)
 		FRotator Facing = (Camera - Tag->GetComponentLocation()).Rotation();
 		Facing.Pitch = 0.f;
 		Facing.Roll = 0.f;
@@ -989,14 +1004,21 @@ bool UChatControlSubsystem::TryTamePet(APawn* Pet, AActor* Owner) const
 			{
 				Params.Add(*P);
 			}
-			const FObjectPropertyBase* ActorParam = Params.Num() == 1 ? CastField<FObjectPropertyBase>(Params[0]) : nullptr;
-			if (Params.Num() == 0 || (ActorParam && !Params[0]->HasAnyPropertyFlags(CPF_ReturnParm | CPF_OutParm) && Owner->IsA(ActorParam->PropertyClass)))
+			const bool bInput = Params.Num() == 1 && !Params[0]->HasAnyPropertyFlags(CPF_ReturnParm | CPF_OutParm);
+			const FObjectPropertyBase* ActorParam = bInput ? CastField<FObjectPropertyBase>(Params[0]) : nullptr;
+			const FBoolProperty* BoolParam = bInput ? CastField<FBoolProperty>(Params[0]) : nullptr;
+			if (Params.Num() == 0 || BoolParam || (ActorParam && Owner->IsA(ActorParam->PropertyClass)))
 			{
 				TArray<uint8> Buffer;
 				Buffer.SetNumZeroed(FMath::Max<int32>(1, Function->ParmsSize));
 				if (ActorParam)
 				{
 					ActorParam->SetObjectPropertyValue_InContainer(Buffer.GetData(), Owner);
+				}
+				if (BoolParam)
+				{
+					// SetTamed(true)
+					BoolParam->SetPropertyValue_InContainer(Buffer.GetData(), true);
 				}
 				Target->ProcessEvent(Function, Buffer.GetData());
 				UE_LOG(LogChatControl, Log, TEXT("Pet: called %s::%s"), *Target->GetClass()->GetName(), *FunctionName);

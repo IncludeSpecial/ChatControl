@@ -71,7 +71,7 @@ public:
 	void Panic();
 
 	/** Floating text above an actor that always faces the camera */
-	class UTextRenderComponent* AttachNameTag(AActor* Target, const FString& Text, const FColor& Color, float Height);
+	class UWidgetComponent* AttachNameTag(AActor* Target, const FString& Text, const FColor& Color, float Height);
 	/** Name tag color for a viewer: their chat role color, or Default for viewers without a role */
 	FColor GetNameColor(const FString& ViewerName, const FColor& Default) const;
 	/** Spawns (or replaces) the viewer's named pet next to the player, or at At when restoring a save */
@@ -189,7 +189,7 @@ private:
 	int32 SessionDeaths = 0;
 	bool bPlayerWasDead = false;
 	TMap<FString, int32> SessionEffectsByViewer;
-	TArray<TWeakObjectPtr<class UTextRenderComponent>> NameTags;
+	TArray<TWeakObjectPtr<class UWidgetComponent>> NameTags;
 	/** viewer key -> their pet */
 	TMap<FString, TWeakObjectPtr<AActor>> Pets;
 	/** Last seen chat role per viewer name (lower case): 4 streamer, 3 moderator, 2 VIP, 1 subscriber */
@@ -221,7 +221,7 @@ private:
 	double NextWorldSave = 0.0;
 	/** viewer key -> their named machine */
 	TMap<FString, TWeakObjectPtr<AActor>> NamedBuildings;
-	TMap<FString, TWeakObjectPtr<class UTextRenderComponent>> BuildingTags;
+	TMap<FString, TWeakObjectPtr<class UWidgetComponent>> BuildingTags;
 
 	TMap<FString, double> GlobalCooldownUntil;
 	/** Key: viewerKey|effectId */

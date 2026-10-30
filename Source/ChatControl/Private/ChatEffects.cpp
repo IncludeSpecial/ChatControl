@@ -786,7 +786,7 @@ TMap<FString, FChatEffect> ChatEffects::CreateAll()
 		TSharedRef<float> LastHealth = MakeShared<float>(Health->GetCurrentHealth());
 		TSharedRef<double> NextBite = MakeShared<double>(FPlatformTime::Seconds() + 2.0);
 		TSharedRef<bool> bFed = MakeShared<bool>(false);
-		// Health drops every 2 s; any healing (berries, nuts, medicine) ends the hunger. Never kills: stops at 10%.
+		// Health drops every 2 s; eating (berries, nuts, medicine) ends the hunger. Never kills: stops at 10%.
 		Subsystem->StartTimedEffect(TEXT("hungry"), Ctx.Settings->Duration,
 			[Subsystem, Damage, LastHealth, NextBite, bFed]
 			{
@@ -797,7 +797,8 @@ TMap<FString, FChatEffect> ChatEffects::CreateAll()
 					return;
 				}
 				const float Current = Health->GetCurrentHealth();
-				if (Current > *LastHealth + 0.1f)
+				// Natural regeneration trickles in; food and medicine heal in one jump
+				if (Current > *LastHealth + 4.f)
 				{
 					*bFed = true;
 					Subsystem->Announce(Tr(TEXT("You ate something - the hunger is gone."), TEXT("Ты поел(а) - голод прошёл.")));

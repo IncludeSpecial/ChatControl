@@ -6,7 +6,8 @@
 #include "FGGameState.h"
 #include "Creature/FGCreature.h"
 #include "Buildables/FGBuildableFactory.h"
-#include "Components/TextRenderComponent.h"
+#include "Components/WidgetComponent.h"
+#include "FGVehicle.h"
 #include "EngineUtils.h"
 #include "JsonObjectConverter.h"
 #include "Misc/FileHelper.h"
@@ -19,6 +20,22 @@ namespace
 	const FColor PetColor(120, 255, 120);
 	const FColor BuildingColor(255, 210, 90);
 	const FColor WelcomeColor(255, 255, 255);
+
+	/** Machines and vehicles (tractors, trucks, explorers, trains) can carry a viewer's name */
+	bool IsNameable(const AActor* Actor)
+	{
+		return Actor && (Actor->IsA<AFGBuildableFactory>() || Actor->IsA<AFGVehicle>());
+	}
+
+	FText NameableDisplayName(const AActor* Actor)
+	{
+		if (const AFGVehicle* Vehicle = Cast<AFGVehicle>(Actor))
+		{
+			return Vehicle->mDisplayName;
+		}
+		const AFGBuildable* Building = Cast<AFGBuildable>(Actor);
+		return Building ? Building->mDisplayName : FText::FromString(Actor->GetName());
+	}
 
 	/** Height of the name tag above a machine: just over its top */
 	float TagHeightFor(const AActor* Actor)
@@ -154,8 +171,8 @@ bool UChatControlSubsystem::NameBuilding(const FString& ViewerKey, const FString
 	{
 		return false;
 	}
-	// The machine under the crosshair, otherwise the nearest one within 20 m
-	AFGBuildableFactory* Target = nullptr;
+	// The machine or vehicle under the crosshair, otherwise the nearest one within 20 m (vehicles first)
+	AActor* Target = nullptr;
 	FVector EyeLocation;
 	FRotator EyeRotation;
 	Player->GetActorEyesViewPoint(EyeLocation, EyeRotation);
@@ -167,7 +184,20 @@ bool UChatControlSubsystem::NameBuilding(const FString& ViewerKey, const FString
 	FCollisionQueryParams Query(TEXT("ChatControlName"), false, Player);
 	if (World->LineTraceSingleByChannel(Hit, EyeLocation, EyeLocation + EyeRotation.Vector() * 3000.f, ECC_Visibility, Query))
 	{
-		Target = Cast<AFGBuildableFactory>(Hit.GetActor());
+		Target = IsNameable(Hit.GetActor()) ? Hit.GetActor() : nullptr;
+	}
+	if (!Target)
+	{
+		float Best = 2000.f;
+		for (TActorIterator<AFGVehicle> It(World); It; ++It)
+		{
+			const float Distance = FVector::Dist(It->GetActorLocation(), Player->GetActorLocation());
+			if (Distance < Best)
+			{
+				Best = Distance;
+				Target = *It;
+			}
+		}
 	}
 	if (!Target)
 	{
@@ -188,7 +218,7 @@ bool UChatControlSubsystem::NameBuilding(const FString& ViewerKey, const FString
 		return false;
 	}
 	// One machine per viewer: the name moves to the new one
-	if (TWeakObjectPtr<UTextRenderComponent>* OldTag = BuildingTags.Find(ViewerKey); OldTag && OldTag->IsValid())
+	if (TWeakObjectPtr<UWidgetComponent>* OldTag = BuildingTags.Find(ViewerKey); OldTag && OldTag->IsValid())
 	{
 		(*OldTag)->DestroyComponent();
 	}
@@ -196,7 +226,7 @@ bool UChatControlSubsystem::NameBuilding(const FString& ViewerKey, const FString
 	NamedBuildings.Add(ViewerKey, Target);
 	FindOrAddMark(WorldData.Buildings, ViewerKey, ViewerName).Location = Target->GetActorLocation();
 	SaveWorldData();
-	Announce(FText::Format(Tr(TEXT("{0} signed this machine: {1}"), TEXT("{0} подписывает машину: {1}")), FText::FromString(ViewerName), Target->mDisplayName));
+	Announce(FText::Format(Tr(TEXT("{0} signed this machine: {1}"), TEXT("{0} подписывает машину: {1}")), FText::FromString(ViewerName), NameableDisplayName(Target)));
 	return true;
 }
 
@@ -262,10 +292,16 @@ void UChatControlSubsystem::TickWorldData(double Now)
 			Mark.Location = (*Pet)->GetActorLocation();
 			return false;
 		});
-		WorldData.Buildings.RemoveAll([this](const FChatWorldMark& Mark)
+		WorldData.Buildings.RemoveAll([this](FChatWorldMark& Mark)
 		{
 			const TWeakObjectPtr<AActor>* Building = NamedBuildings.Find(Mark.ViewerKey);
-			return !Building || !Building->IsValid();
+			if (!Building || !Building->IsValid())
+			{
+				return true;
+			}
+			// Vehicles drive around
+			Mark.Location = (*Building)->GetActorLocation();
+			return false;
 		});
 		SaveWorldData();
 	}
@@ -280,13 +316,16 @@ void UChatControlSubsystem::ApplyWorldData()
 	}
 	for (const FChatWorldMark& Mark : WorldData.Buildings)
 	{
+		// Machines stand still; a vehicle is saved where it was at most 30 s after the last update
 		AActor* Found = nullptr;
-		for (TActorIterator<AFGBuildableFactory> It(World); It; ++It)
+		float Best = 1500.f;
+		for (TActorIterator<AActor> It(World); It; ++It)
 		{
-			if (FVector::DistSquared(It->GetActorLocation(), Mark.Location) < 100.f * 100.f)
+			const float Distance = FVector::Dist(It->GetActorLocation(), Mark.Location);
+			if (Distance < Best && IsNameable(*It) && (It->IsA<AFGVehicle>() || Distance < 100.f))
 			{
+				Best = Distance;
 				Found = *It;
-				break;
 			}
 		}
 		if (Found)
