@@ -8,6 +8,7 @@
 #include "FGChatManager.h"
 #include "FGCharacterPlayer.h"
 #include "Creature/FGCreature.h"
+#include "Engine/BlueprintGeneratedClass.h"
 #include "EngineUtils.h"
 #include "GameFramework/GameStateBase.h"
 #include "Buildables/FGBuildableTradingPost.h"
@@ -848,12 +849,84 @@ bool UChatControlSubsystem::SpawnPet(const FString& ViewerKey, const FString& Vi
 	}
 	Pet->SetLifeSpan(FMath::Max(60.f, Settings.PetLifeSpanSeconds));
 	const bool bTamed = FMath::FRand() < Settings.PetTamedChance && TryTamePet(Pet, Player);
+	TryNamePet(Pet, ViewerName);
 	AttachNameTag(Pet, ViewerName, GetNameColor(ViewerName, FColor(120, 255, 120)), 120.f);
 	Pets.Add(ViewerKey, Pet);
 	Announce(bTamed
 		? FText::Format(Tr(TEXT("{0}'s pet came to visit - and it is already tame!"), TEXT("Питомец {0} пришёл в гости - и он уже ручной!")), FText::FromString(ViewerName))
 		: FText::Format(Tr(TEXT("{0}'s pet came to visit!"), TEXT("Питомец {0} пришёл в гости!")), FText::FromString(ViewerName)));
 	return true;
+}
+
+bool UChatControlSubsystem::TryNamePet(APawn* Pet, const FString& Name) const
+{
+	bool bNamed = false;
+	// Only blueprint-declared members, so engine fields like actor labels are never touched
+	for (TFieldIterator<FProperty> It(Pet->GetClass()); It; ++It)
+	{
+		const FString PropertyName = It->GetName();
+		if (!Cast<UBlueprintGeneratedClass>(It->GetOwnerClass()) || !PropertyName.Contains(TEXT("Name")))
+		{
+			continue;
+		}
+		if (const FStrProperty* Str = CastField<FStrProperty>(*It))
+		{
+			Str->SetPropertyValue_InContainer(Pet, Name);
+		}
+		else if (const FTextProperty* Text = CastField<FTextProperty>(*It))
+		{
+			Text->SetPropertyValue_InContainer(Pet, FText::FromString(Name));
+		}
+		else
+		{
+			continue;
+		}
+		UE_LOG(LogChatControl, Log, TEXT("Pet: set %s::%s = %s"), *Pet->GetClass()->GetName(), *PropertyName, *Name);
+		bNamed = true;
+	}
+	for (TFieldIterator<UFunction> It(Pet->GetClass()); It; ++It)
+	{
+		UFunction* Function = *It;
+		const FString FunctionName = Function->GetName();
+		if (!Cast<UBlueprintGeneratedClass>(Function->GetOwnerClass()) || !(FunctionName.Contains(TEXT("SetName")) || FunctionName.Contains(TEXT("Rename"))))
+		{
+			continue;
+		}
+		TArray<FProperty*> Params;
+		for (TFieldIterator<FProperty> P(Function); P && P->HasAnyPropertyFlags(CPF_Parm); ++P)
+		{
+			Params.Add(*P);
+		}
+		if (Params.Num() != 1 || Params[0]->HasAnyPropertyFlags(CPF_ReturnParm | CPF_OutParm))
+		{
+			UE_LOG(LogChatControl, Log, TEXT("Pet: skipped %s (%d params)"), *FunctionName, Params.Num());
+			continue;
+		}
+		TArray<uint8> Buffer;
+		Buffer.SetNumZeroed(Function->ParmsSize);
+		Params[0]->InitializeValue_InContainer(Buffer.GetData());
+		if (const FStrProperty* Str = CastField<FStrProperty>(Params[0]))
+		{
+			Str->SetPropertyValue_InContainer(Buffer.GetData(), Name);
+		}
+		else if (const FTextProperty* Text = CastField<FTextProperty>(Params[0]))
+		{
+			Text->SetPropertyValue_InContainer(Buffer.GetData(), FText::FromString(Name));
+		}
+		else
+		{
+			continue;
+		}
+		Pet->ProcessEvent(Function, Buffer.GetData());
+		Params[0]->DestroyValue_InContainer(Buffer.GetData());
+		UE_LOG(LogChatControl, Log, TEXT("Pet: called %s(%s)"), *FunctionName, *Name);
+		bNamed = true;
+	}
+	if (!bNamed)
+	{
+		UE_LOG(LogChatControl, Log, TEXT("Pet: no blueprint name field found, only the floating name tag is shown"));
+	}
+	return bNamed;
 }
 
 FColor UChatControlSubsystem::GetNameColor(const FString& ViewerName, const FColor& Default) const

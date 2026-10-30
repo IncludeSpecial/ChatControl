@@ -188,6 +188,8 @@ private:
 	TMap<FString, uint8> ViewerRoles;
 	/** Lizard doggo taming lives in blueprints, so it is found by name at runtime */
 	bool TryTamePet(APawn* Pet, AActor* Owner) const;
+	/** Writes the viewer's name into the doggo's own blueprint name (its built-in name tag) */
+	bool TryNamePet(APawn* Pet, const FString& Name) const;
 
 	TMap<FString, double> GlobalCooldownUntil;
 	/** Key: viewerKey|effectId */
