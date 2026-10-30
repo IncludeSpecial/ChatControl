@@ -4,7 +4,7 @@
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 
-static FChatEffectSettings MakeEffect(int32 Cost, float GlobalCooldown, float ViewerCooldown, float Duration, int32 ChaosWeight)
+static FChatEffectSettings MakeEffect(int32 Cost, float GlobalCooldown, float ViewerCooldown, float Duration, int32 ChaosWeight, int32 Amount = 0)
 {
 	FChatEffectSettings Effect;
 	Effect.Cost = Cost;
@@ -12,6 +12,7 @@ static FChatEffectSettings MakeEffect(int32 Cost, float GlobalCooldown, float Vi
 	Effect.ViewerCooldown = ViewerCooldown;
 	Effect.Duration = Duration;
 	Effect.ChaosWeight = ChaosWeight;
+	Effect.Amount = Amount;
 	return Effect;
 }
 
@@ -26,6 +27,9 @@ void FChatControlSettings::AddMissingEffectDefaults()
 		{ TEXT("jump"),     MakeEffect(30,  30.f, 60.f,  20.f, 1) },
 		{ TEXT("moon"),     MakeEffect(50,  45.f, 60.f,  30.f, 1) },
 		{ TEXT("heavy"),    MakeEffect(60,  45.f, 60.f,  20.f, 2) },
+		// Creatures
+		{ TEXT("ambush"),   MakeEffect(80,  60.f,  120.f, 0.f, 2, 3) },
+		{ TEXT("boss"),     MakeEffect(300, 180.f, 300.f, 0.f, 4, 1) },
 	};
 	for (const auto& Pair : Defaults)
 	{

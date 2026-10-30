@@ -6,6 +6,7 @@
 #include "FGInventoryComponent.h"
 #include "Resources/FGItemDescriptor.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Creature/FGCreature.h"
 
 #define LOCTEXT_NAMESPACE "ChatControl"
 
@@ -31,6 +32,80 @@ namespace
 		TEXT("/Game/FactoryGame/Resource/Parts/CircuitBoard/Desc_CircuitBoard.Desc_CircuitBoard_C"),
 		TEXT("/Game/FactoryGame/Resource/Parts/Computer/Desc_Computer.Desc_Computer_C"),
 	};
+
+	const TCHAR* SmallCreaturePool[] = {
+		TEXT("/Game/FactoryGame/Character/Creature/Enemy/Hog/Char_Hog.Char_Hog_C"),
+		TEXT("/Game/FactoryGame/Character/Creature/Enemy/Stinger/SmallStinger/Char_Stinger_Child.Char_Stinger_Child_C"),
+		TEXT("/Game/FactoryGame/Character/Creature/Enemy/Spitter/SpitterForest/Char_SpitterForestSmall.Char_SpitterForestSmall_C"),
+	};
+
+	const TCHAR* BossCreaturePool[] = {
+		TEXT("/Game/FactoryGame/Character/Creature/Enemy/Hog/AlphaHog/Char_AlphaHog.Char_AlphaHog_C"),
+		TEXT("/Game/FactoryGame/Character/Creature/Enemy/Stinger/BigStinger/Char_EliteStinger.Char_EliteStinger_C"),
+		TEXT("/Game/FactoryGame/Character/Creature/Enemy/Spitter/SpitterForest/Char_SpitterForestAlpha.Char_SpitterForestAlpha_C"),
+	};
+
+	/** Spawned creatures despawn after this long, so chat can't flood the save with enemies */
+	constexpr float CreatureLifeSpan = 300.f;
+
+	/** Finds ground on a ring around the player, so creatures come from the sides instead of spawning inside the player */
+	bool FindSpawnPoint(UWorld* World, const AActor* Player, FVector& OutLocation)
+	{
+		const FVector Center = Player->GetActorLocation();
+		FCollisionQueryParams Params(TEXT("ChatControlSpawn"), false, Player);
+		for (int32 Attempt = 0; Attempt < 12; ++Attempt)
+		{
+			const float Angle = FMath::FRandRange(0.f, 2.f * PI);
+			const float Distance = FMath::FRandRange(1000.f, 1600.f);
+			const FVector Probe = Center + FVector(FMath::Cos(Angle), FMath::Sin(Angle), 0.f) * Distance;
+			FHitResult Hit;
+			if (World->LineTraceSingleByChannel(Hit, Probe + FVector(0, 0, 1500.f), Probe - FVector(0, 0, 3000.f), ECC_Visibility, Params))
+			{
+				OutLocation = Hit.ImpactPoint + FVector(0, 0, 150.f);
+				return true;
+			}
+		}
+		return false;
+	}
+
+	template <int32 N>
+	int32 SpawnCreatures(const FChatEffectContext& Ctx, const TCHAR* (&Pool)[N], int32 Count)
+	{
+		int32 Spawned = 0;
+		for (int32 i = 0; i < Count; ++i)
+		{
+			UClass* CreatureClass = LoadClass<APawn>(nullptr, Pool[FMath::RandRange(0, N - 1)]);
+			FVector Location;
+			if (!CreatureClass || !FindSpawnPoint(Ctx.World, Ctx.Player, Location))
+			{
+				continue;
+			}
+			// Face the player so they notice them and aggro quickly
+			const FRotator Facing((Ctx.Player->GetActorLocation() - Location).GetSafeNormal2D().Rotation());
+			FActorSpawnParameters Params;
+			Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButDontSpawnIfColliding;
+			APawn* Creature = Ctx.World->SpawnActor<APawn>(CreatureClass, Location, Facing, Params);
+			if (!Creature)
+			{
+				continue;
+			}
+			if (!Creature->GetController())
+			{
+				Creature->SpawnDefaultController();
+			}
+			if (AFGCreature* FGCreature = Cast<AFGCreature>(Creature))
+			{
+				FGCreature->SetIsPersistent(false);
+			}
+			Creature->SetLifeSpan(CreatureLifeSpan);
+			++Spawned;
+		}
+		if (Spawned == 0)
+		{
+			UE_LOG(LogChatControl, Warning, TEXT("No creatures spawned (no ground found or classes failed to load)"));
+		}
+		return Spawned;
+	}
 
 	template <int32 N>
 	bool GiveRandomItem(const FChatEffectContext& Ctx, const TCHAR* (&Pool)[N], float StackFraction)
@@ -155,6 +230,26 @@ TMap<FString, FChatEffect> ChatEffects::CreateAll()
 	{
 		return ScaleMovementTemporarily(Ctx, TEXT("gravity"), &UCharacterMovementComponent::GravityScale, 3.f,
 			FText::Format(LOCTEXT("Heavy", "{0} made you heavy for {1} s!"), FText::FromString(Ctx.ViewerName), FText::AsNumber(FMath::RoundToInt(Ctx.Settings->Duration))));
+	});
+
+	Add(TEXT("ambush"), true, [](const FChatEffectContext& Ctx)
+	{
+		const int32 Spawned = SpawnCreatures(Ctx, SmallCreaturePool, FMath::Max(1, Ctx.Settings->Amount));
+		if (Spawned > 0)
+		{
+			Ctx.Subsystem->Announce(FText::Format(LOCTEXT("Ambush", "{0} sent an ambush: {1} enemies incoming!"), FText::FromString(Ctx.ViewerName), FText::AsNumber(Spawned)));
+		}
+		return Spawned > 0;
+	});
+
+	Add(TEXT("boss"), true, [](const FChatEffectContext& Ctx)
+	{
+		const int32 Spawned = SpawnCreatures(Ctx, BossCreaturePool, FMath::Max(1, Ctx.Settings->Amount));
+		if (Spawned > 0)
+		{
+			Ctx.Subsystem->Announce(FText::Format(LOCTEXT("Boss", "{0} summoned a BOSS! Run!"), FText::FromString(Ctx.ViewerName)));
+		}
+		return Spawned > 0;
 	});
 
 	return Effects;

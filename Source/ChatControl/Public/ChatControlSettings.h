@@ -19,6 +19,8 @@ struct FChatEffectSettings
 	UPROPERTY() float Duration = 20.f;
 	/** Chaos budget points consumed (harmful effects only) */
 	UPROPERTY() int32 ChaosWeight = 1;
+	/** How many things the effect spawns (creatures). 0 = not applicable */
+	UPROPERTY() int32 Amount = 0;
 };
 
 /**

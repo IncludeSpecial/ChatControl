@@ -119,6 +119,8 @@ namespace
 		{ TEXT("jump"),    TEXT("!jump - super jump"),           TEXT("!jump - супер-прыжок") },
 		{ TEXT("moon"),    TEXT("!moon - moon gravity"),         TEXT("!moon - лунная гравитация") },
 		{ TEXT("heavy"),   TEXT("!heavy - heavy gravity"),       TEXT("!heavy - тяжёлая гравитация") },
+		{ TEXT("ambush"),  TEXT("!ambush - enemy ambush"),       TEXT("!ambush - засада врагов") },
+		{ TEXT("boss"),    TEXT("!boss - alpha monster"),        TEXT("!boss - альфа-монстр") },
 	};
 }
 
@@ -211,6 +213,11 @@ void UChatControlModConfig::Register(UConfigManager* ConfigManager, const FChatC
 			AddInt(Section, TEXT("Duration"), FMath::RoundToInt(Effect->Duration),
 				Tr(TEXT("Duration (s)"), TEXT("Длительность (с)")));
 		}
+		if (Effect->Amount > 0)
+		{
+			AddInt(Section, TEXT("Amount"), Effect->Amount,
+				Tr(TEXT("Creatures"), TEXT("Количество существ")));
+		}
 	}
 
 	ConfigManager->RegisterModConfiguration(StaticClass());
@@ -287,6 +294,7 @@ bool UChatControlModConfig::ApplyTo(UConfigManager* ConfigManager, FChatControlS
 			Effect.Duration = Duration;
 			bChanged = true;
 		}
+		bChanged |= Read<UConfigPropertyInteger>(Section, TEXT("Amount"), Effect.Amount);
 	}
 
 	return bChanged;

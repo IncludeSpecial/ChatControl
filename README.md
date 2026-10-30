@@ -18,8 +18,12 @@ No Twitch token needed: chat is read anonymously.
 | `!effects` | everyone | list effects and current prices |
 | `!hi`, `!gift` | everyone | free effects with cooldowns |
 | `!biggift`, `!jump`, `!moon`, `!heavy` | everyone | paid with chips |
+| `!ambush`, `!boss` | everyone | spawn enemies around the streamer, paid with chips |
 | `!pause` | streamer, mods | pause/resume harmful effects |
 | `!test <effect>` | streamer | run an effect for free |
+| `!test chips/bits/sub/gifts/raid [N]`, `!test autochaos` | streamer | simulate events for testing |
+
+Raids spawn one ambush per 5 raiders (up to 5) and a boss for raids of 30+. Spawned creatures despawn after 5 minutes.
 
 Prices grow with the number of active viewers.
 

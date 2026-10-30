@@ -210,19 +210,24 @@ void UChatControlSubsystem::HandleEvent(const FChatEvent& Event)
 	case EChatEventType::Raid:
 	{
 		Announce(FText::Format(LOCTEXT("Raid", "{0} is raiding with {1} viewers! Brace yourself!"), Name, FText::AsNumber(Event.Amount)));
-		TArray<FString> Harmful;
-		for (const auto& Pair : Effects)
+		auto IsEnabled = [this](const TCHAR* EffectId)
 		{
-			const FChatEffectSettings* EffectSettings = Settings.Effects.Find(Pair.Key);
-			if (Pair.Value.bHarmful && EffectSettings && EffectSettings->bEnabled)
+			const FChatEffectSettings* EffectSettings = Settings.Effects.Find(EffectId);
+			return EffectSettings && EffectSettings->bEnabled && Effects.Contains(EffectId);
+		};
+
+		// One ambush per 5 raiders (max 5), plus a boss for big raids
+		const int32 Waves = FMath::Clamp(Event.Amount / 5, 1, 5);
+		if (IsEnabled(TEXT("ambush")))
+		{
+			for (int32 i = 0; i < Waves; ++i)
 			{
-				Harmful.Add(Pair.Key);
+				ChaosQueue.Add({ TEXT("ambush"), Key, Event.DisplayName, 0 });
 			}
 		}
-		const int32 Waves = FMath::Clamp(Event.Amount / 5, 1, 5);
-		for (int32 i = 0; i < Waves && Harmful.Num() > 0; ++i)
+		if (Event.Amount >= 30 && IsEnabled(TEXT("boss")))
 		{
-			ChaosQueue.Add({ Harmful[FMath::RandRange(0, Harmful.Num() - 1)], Key, Event.DisplayName, 0 });
+			ChaosQueue.Add({ TEXT("boss"), Key, Event.DisplayName, 0 });
 		}
 		break;
 	}
