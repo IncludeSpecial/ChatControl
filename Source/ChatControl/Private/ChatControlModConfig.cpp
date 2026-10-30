@@ -33,24 +33,24 @@ namespace
 	}
 
 	/**
-	 * The section widget defaults to a horizontal list without a header.
-	 * Groups use a vertical list; each effect is a horizontal row so all its options sit on one line.
+	 * The section widget defaults to a horizontal list without a header, so every section is made vertical.
+	 * HeaderText stays empty: the widget shows "{HeaderText} ({DisplayName})" and falls back to DisplayName alone.
 	 */
-	UConfigPropertySection* NewSection(UObject* Outer, const FText& Name, bool bHasHeader, bool bHorizontal = false, const FText& Tooltip = FText::GetEmpty())
+	UConfigPropertySection* NewSection(UObject* Outer, const FText& Name, bool bHasHeader, bool bCollapsed = false, const FText& Tooltip = FText::GetEmpty())
 	{
 		UConfigPropertySection* Section = NewProperty<UConfigPropertySection>(Outer, TEXT("BP_ConfigPropertySection"), Name, Tooltip);
 		if (UCP_Section* Widget = Cast<UCP_Section>(Section))
 		{
-			Widget->WidgetType = bHorizontal ? ECP_SectionWidgetType::CPS_Horizontal : ECP_SectionWidgetType::CPS_Vertical;
+			Widget->WidgetType = ECP_SectionWidgetType::CPS_Vertical;
 			Widget->HasHeader = bHasHeader;
-			Widget->HeaderText = Name;
+			Widget->Collapsed = bCollapsed;
 		}
 		return Section;
 	}
 
-	UConfigPropertySection* AddSection(UConfigPropertySection* Parent, const FString& Key, const FText& Name, bool bHorizontal = false, const FText& Tooltip = FText::GetEmpty())
+	UConfigPropertySection* AddSection(UConfigPropertySection* Parent, const FString& Key, const FText& Name, bool bCollapsed = false, const FText& Tooltip = FText::GetEmpty())
 	{
-		UConfigPropertySection* Section = NewSection(Parent, Name, true, bHorizontal, Tooltip);
+		UConfigPropertySection* Section = NewSection(Parent, Name, true, bCollapsed, Tooltip);
 		Parent->SectionProperties.Add(Key, Section);
 		return Section;
 	}
@@ -159,6 +159,15 @@ namespace
 		{ TEXT("pet"),     TEXT("Viewers"),   TEXT("!pet - named pet"),          TEXT("!pet - именной питомец") },
 		{ TEXT("ambush"),  TEXT("Creatures"), TEXT("!ambush - enemy ambush"),    TEXT("!ambush - засада врагов") },
 		{ TEXT("boss"),    TEXT("Creatures"), TEXT("!boss - alpha monster"),     TEXT("!boss - альфа-монстр") },
+		{ TEXT("fly"),     TEXT("Movement"),  TEXT("!fly - hover in the air (strength = height, m)"), TEXT("!fly - парение в воздухе (сила = высота, м)") },
+		{ TEXT("shrink"),  TEXT("Movement"),  TEXT("!shrink - tiny player (strength = size)"), TEXT("!shrink - маленький игрок (сила = размер)") },
+		{ TEXT("giant"),   TEXT("Movement"),  TEXT("!giant - giant player (strength = size)"), TEXT("!giant - великан (сила = размер)") },
+		{ TEXT("hungry"),  TEXT("Survival"),  TEXT("!hungry - health drains until you eat (strength = HP per 2 s)"), TEXT("!hungry - здоровье тает, пока не поешь (сила = HP за 2 с)") },
+		{ TEXT("inventory"), TEXT("Survival"), TEXT("!inventory - shuffle the inventory"), TEXT("!inventory - перемешать инвентарь") },
+		{ TEXT("fog"),     TEXT("World"),     TEXT("!fog - thick fog (strength = density)"), TEXT("!fog - густой туман (сила = плотность)") },
+		{ TEXT("dance"),   TEXT("Help"),      TEXT("!dance - freeze nearby creatures (strength = radius, m)"), TEXT("!dance - заморозить существ рядом (сила = радиус, м)") },
+		{ TEXT("heal"),    TEXT("Help"),      TEXT("!heal - full health"),       TEXT("!heal - полное здоровье") },
+		{ TEXT("name"),    TEXT("Viewers"),   TEXT("!name - sign the machine you look at (kept in the save)"), TEXT("!name - подписать машину, на которую смотришь (сохраняется)") },
 	};
 
 	FText CategoryName(const FString& Category)
@@ -169,6 +178,8 @@ namespace
 		if (Category == TEXT("Factory"))  return Tr(TEXT("Chaos: factory"), TEXT("Хаос: фабрика"));
 		if (Category == TEXT("World"))    return Tr(TEXT("World"), TEXT("Мир"));
 		if (Category == TEXT("Viewers"))  return Tr(TEXT("Viewers in the world"), TEXT("Зрители в мире"));
+		if (Category == TEXT("Survival")) return Tr(TEXT("Chaos: survival"), TEXT("Хаос: выживание"));
+		if (Category == TEXT("Help"))     return Tr(TEXT("Help the streamer"), TEXT("Помощь стримеру"));
 		return Tr(TEXT("Chaos: creatures"), TEXT("Хаос: существа"));
 	}
 }
@@ -273,7 +284,7 @@ void UChatControlModConfig::Register(UConfigManager* ConfigManager, const FChatC
 	AddInt(Economy, TEXT("ChipsPerSub"), Defaults.ChipsPerSub,
 		Tr(TEXT("Chips per sub"), TEXT("Чипов за подписку")));
 
-	// --- Effects: one row per effect, grouped by kind ---
+	// --- Effects: one collapsed block per effect, grouped by kind ---
 	UConfigPropertySection* Effects = AddSection(Root, TEXT("Effects"), Tr(TEXT("Effects"), TEXT("Эффекты")));
 	TMap<FString, UConfigPropertySection*> Categories;
 	for (const FEffectLabel& Label : EffectLabels)
@@ -367,8 +378,25 @@ void UChatControlModConfig::Register(UConfigManager* ConfigManager, const FChatC
 
 	// --- Viewers in the world ---
 	UConfigPropertySection* Viewers = AddSection(Root, TEXT("Viewers"), Tr(TEXT("Viewers in the world"), TEXT("Зрители в мире")));
+	AddBool(Viewers, TEXT("Welcome"), Defaults.bWelcomeEnabled,
+		Tr(TEXT("Greet new chatters in the world"), TEXT("Приветствие в мире при первом сообщении")),
+		Tr(TEXT("The viewer's name appears next to you for a few seconds"), TEXT("Ник зрителя на несколько секунд появляется рядом с тобой")));
+	AddInt(Viewers, TEXT("WelcomeSeconds"), FMath::RoundToInt(Defaults.WelcomeSeconds), Tr(TEXT("Greeting stays for (s)"), TEXT("Приветствие висит (с)")));
+	AddInt(Viewers, TEXT("DailyChips"), Defaults.DailyChips,
+		Tr(TEXT("!daily bonus (chips)"), TEXT("Бонус !daily (чипы)")),
+		Tr(TEXT("Once per day per viewer. 0 = off"), TEXT("Раз в сутки на зрителя. 0 = выключено")));
+	AddBool(Viewers, TEXT("Ranks"), Defaults.bRanksEnabled,
+		Tr(TEXT("Viewer ranks"), TEXT("Звания зрителей")),
+		Tr(TEXT("By lifetime chips spent: Pioneer, Engineer, Senior Engineer, Project Lead, FICSIT Director"),
+		   TEXT("По сумме потраченных чипов: Пионер, Инженер, Старший инженер, Руководитель проекта, Директор FICSIT")));
+	AddString(Viewers, TEXT("RankList"), Defaults.Ranks,
+		Tr(TEXT("Custom ranks"), TEXT("Свои звания")),
+		Tr(TEXT("Format: 0=Rookie;500=Pro;2000=Legend. Empty = built-in"), TEXT("Формат: 0=Новичок;500=Профи;2000=Легенда. Пусто = стандартные")));
 	AddBool(Viewers, TEXT("PetOnSub"), Defaults.bPetOnSub,
 		Tr(TEXT("Pet for a subscription"), TEXT("Питомец за подписку")));
+	AddBool(Viewers, TEXT("PetPermanent"), Defaults.bPetPermanent,
+		Tr(TEXT("Pets stay forever"), TEXT("Питомцы остаются навсегда")),
+		Tr(TEXT("Kept in the save - a zoo of your subscribers. Off = they leave after the time below"), TEXT("Сохраняются в сейве - зоопарк подписчиков. Выкл. = уходят через время ниже")));
 	AddInt(Viewers, TEXT("PetLifeSpan"), FMath::RoundToInt(Defaults.PetLifeSpanSeconds),
 		Tr(TEXT("Pets stay for (s)"), TEXT("Питомцы остаются (с)")));
 	AddBool(Viewers, TEXT("CreatureNameTags"), Defaults.bCreatureNameTags,
@@ -520,7 +548,13 @@ bool UChatControlModConfig::ApplyTo(UConfigManager* ConfigManager, FChatControlS
 	bChanged |= Read<UConfigPropertyString>(Obs, TEXT("Folder"), Settings.OverlayFolder);
 
 	const UConfigPropertySection* Viewers = GetSection(Root, TEXT("Viewers"));
+	bChanged |= Read<UConfigPropertyBool>(Viewers, TEXT("Welcome"), Settings.bWelcomeEnabled);
+	bChanged |= ReadSeconds(Viewers, TEXT("WelcomeSeconds"), Settings.WelcomeSeconds, 1.f, 2.f);
+	bChanged |= Read<UConfigPropertyInteger>(Viewers, TEXT("DailyChips"), Settings.DailyChips);
+	bChanged |= Read<UConfigPropertyBool>(Viewers, TEXT("Ranks"), Settings.bRanksEnabled);
+	bChanged |= Read<UConfigPropertyString>(Viewers, TEXT("RankList"), Settings.Ranks);
 	bChanged |= Read<UConfigPropertyBool>(Viewers, TEXT("PetOnSub"), Settings.bPetOnSub);
+	bChanged |= Read<UConfigPropertyBool>(Viewers, TEXT("PetPermanent"), Settings.bPetPermanent);
 	bChanged |= ReadSeconds(Viewers, TEXT("PetLifeSpan"), Settings.PetLifeSpanSeconds, 1.f, 60.f);
 	bChanged |= Read<UConfigPropertyBool>(Viewers, TEXT("CreatureNameTags"), Settings.bCreatureNameTags);
 	bChanged |= Read<UConfigPropertyFloat>(Viewers, TEXT("PetTamedChance"), Settings.PetTamedChance);

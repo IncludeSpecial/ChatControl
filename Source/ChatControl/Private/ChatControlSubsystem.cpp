@@ -266,6 +266,7 @@ void UChatControlSubsystem::Tick(float DeltaTime)
 	}
 
 	TickConfig(Now);
+	TickWorldData(Now);
 	TickEconomy(Now);
 	TickTimedEffects(Now);
 	TickDelayedActions(Now);
@@ -324,9 +325,17 @@ void UChatControlSubsystem::HandleEvent(const FChatEvent& Event)
 	switch (Event.Type)
 	{
 	case EChatEventType::Message:
+	{
+		const FChatViewerRecord* Record = Economy.Find(Key);
+		const bool bFirstMessage = !Record || !Record->bGreetedThisSession;
 		Economy.OnViewerMessage(Key, Event.DisplayName, Now, Settings.FirstMessageBonus);
+		if (bFirstMessage && !Event.bIsBroadcaster)
+		{
+			WelcomeViewer(Event.DisplayName);
+		}
 		HandleCommand(Event);
 		break;
+	}
 
 	case EChatEventType::Bits:
 	{
@@ -447,7 +456,23 @@ void UChatControlSubsystem::HandleCommand(const FChatEvent& Event)
 	if (Command == TEXT("chips") || Command == TEXT("чипы"))
 	{
 		const FChatViewerRecord* Record = Economy.Find(Key);
-		Announce(FText::Format(Tr(TEXT("{0} has {1} chips"), TEXT("У {0} {1} чипов")), Name, FText::AsNumber(Record ? Record->Chips : 0)));
+		const FString Rank = GetRank(Record ? Record->ChipsSpent : 0);
+		Announce(Rank.IsEmpty()
+			? FText::Format(Tr(TEXT("{0} has {1} chips"), TEXT("У {0} {1} чипов")), Name, FText::AsNumber(Record ? Record->Chips : 0))
+			: FText::Format(Tr(TEXT("{0} ({2}) has {1} chips"), TEXT("У {0} ({2}) {1} чипов")), Name, FText::AsNumber(Record ? Record->Chips : 0), FText::FromString(Rank)));
+		return;
+	}
+
+	if ((Command == TEXT("daily") || Command == TEXT("бонус")) && Settings.DailyChips > 0)
+	{
+		if (Economy.ClaimDaily(Key, Event.DisplayName, Settings.DailyChips))
+		{
+			Announce(FText::Format(Tr(TEXT("{0} took the daily bonus: +{1} chips. See you tomorrow!"), TEXT("{0} забирает ежедневный бонус: +{1} чипов. До завтра!")), Name, FText::AsNumber(Settings.DailyChips)));
+		}
+		else
+		{
+			Announce(FText::Format(Tr(TEXT("{0}, the daily bonus is already taken today."), TEXT("{0}, ежедневный бонус сегодня уже получен.")), Name));
+		}
 		return;
 	}
 
@@ -560,7 +585,7 @@ void UChatControlSubsystem::HandleTestCommand(const FChatEvent& Event, const FSt
 	}
 	else if (const FChatEffect* Effect = Effects.Find(What))
 	{
-		ExecuteEffect(*Effect, Event.DisplayName);
+		ExecuteEffect(*Effect, Event.GetEconomyKey(), Event.DisplayName);
 	}
 	else
 	{
@@ -594,12 +619,18 @@ void UChatControlSubsystem::RequestEffect(const FString& EffectId, const FString
 	}
 
 	const int32 Cost = bFree ? 0 : GetScaledCost(EffectSettings->Cost, Now);
+	const FChatViewerRecord* SpenderBefore = Economy.Find(ViewerKey);
+	const int32 SpentBefore = SpenderBefore ? SpenderBefore->ChipsSpent : 0;
 	if (Cost > 0 && !Economy.TrySpend(ViewerKey, Cost))
 	{
 		const FChatViewerRecord* Record = Economy.Find(ViewerKey);
 		Announce(FText::Format(Tr(TEXT("{0} needs {1} chips for !{2} (has {3})"), TEXT("{0}: для !{2} нужно {1} чипов (есть {3})")),
 			FText::FromString(ViewerName), FText::AsNumber(Cost), FText::FromString(EffectId), FText::AsNumber(Record ? Record->Chips : 0)));
 		return;
+	}
+	if (Cost > 0)
+	{
+		CheckRankUp(ViewerKey, SpentBefore);
 	}
 
 	GlobalCooldownUntil.Add(EffectId, Now + EffectSettings->GlobalCooldown);
@@ -612,19 +643,20 @@ void UChatControlSubsystem::RequestEffect(const FString& EffectId, const FString
 		return;
 	}
 
-	if (!ExecuteEffect(*Effect, ViewerName, Args) && Cost > 0)
+	if (!ExecuteEffect(*Effect, ViewerKey, ViewerName, Args) && Cost > 0)
 	{
 		Economy.AddChips(ViewerKey, ViewerName, Cost);
 	}
 }
 
-bool UChatControlSubsystem::ExecuteEffect(const FChatEffect& Effect, const FString& ViewerName, const FString& Args)
+bool UChatControlSubsystem::ExecuteEffect(const FChatEffect& Effect, const FString& ViewerKey, const FString& ViewerName, const FString& Args)
 {
 	FChatEffectContext Ctx;
 	Ctx.World = GetGameWorld();
 	Ctx.Player = FindPlayer();
 	Ctx.Subsystem = this;
 	Ctx.Settings = Settings.Effects.Find(Effect.Id);
+	Ctx.ViewerKey = ViewerKey;
 	Ctx.ViewerName = ViewerName;
 	Ctx.Args = Args;
 
@@ -687,7 +719,7 @@ void UChatControlSubsystem::TickChaosQueue(double Now)
 		{
 			continue;
 		}
-		if (ExecuteEffect(*Effect, Pending.ViewerName, Pending.Args))
+		if (ExecuteEffect(*Effect, Pending.ViewerKey, Pending.ViewerName, Pending.Args))
 		{
 			ChaosHistory.Add({ Now, EffectSettings->ChaosWeight });
 			ChaosQueue.RemoveAt(i);
@@ -806,7 +838,7 @@ void UChatControlSubsystem::TickNameTags()
 	}
 }
 
-bool UChatControlSubsystem::SpawnPet(const FString& ViewerKey, const FString& ViewerName)
+bool UChatControlSubsystem::SpawnPet(const FString& ViewerKey, const FString& ViewerName, const FVector* At)
 {
 	UWorld* World = GetGameWorld();
 	AFGCharacterPlayer* Player = FindPlayer();
@@ -814,7 +846,7 @@ bool UChatControlSubsystem::SpawnPet(const FString& ViewerKey, const FString& Vi
 	{
 		return false;
 	}
-	UClass* PetClass = LoadClass<APawn>(nullptr, TEXT("/Game/FactoryGame/Character/Creature/Wildlife/SpaceRabbit/Char_SpaceRabbit.Char_SpaceRabbit_C"));
+	UClass* PetClass = LoadClass<APawn>(nullptr, PetClassPath);
 	if (!PetClass)
 	{
 		return false;
@@ -825,7 +857,7 @@ bool UChatControlSubsystem::SpawnPet(const FString& ViewerKey, const FString& Vi
 	}
 	FActorSpawnParameters Params;
 	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-	FVector Location = Player->GetActorLocation() + Player->GetActorRightVector() * 250.f;
+	FVector Location = At ? *At : Player->GetActorLocation() + Player->GetActorRightVector() * 250.f;
 	FHitResult Ground;
 	FCollisionQueryParams Query(TEXT("ChatControlPet"), false, Player);
 	if (World->LineTraceSingleByChannel(Ground, Location + FVector(0, 0, 100.f), Location - FVector(0, 0, 500.f), ECC_Visibility, Query))
@@ -842,19 +874,7 @@ bool UChatControlSubsystem::SpawnPet(const FString& ViewerKey, const FString& Vi
 	{
 		Pet->SpawnDefaultController();
 	}
-	// Like other creatures, a pet without a spawner gets culled right away unless it is persistent
-	if (AFGCreature* Creature = Cast<AFGCreature>(Pet))
-	{
-		Creature->SetIsPersistent(true);
-	}
-	Pet->SetLifeSpan(FMath::Max(60.f, Settings.PetLifeSpanSeconds));
-	const bool bTamed = FMath::FRand() < Settings.PetTamedChance && TryTamePet(Pet, Player);
-	TryNamePet(Pet, ViewerName);
-	AttachNameTag(Pet, ViewerName, GetNameColor(ViewerName, FColor(120, 255, 120)), 120.f);
-	Pets.Add(ViewerKey, Pet);
-	Announce(bTamed
-		? FText::Format(Tr(TEXT("{0}'s pet came to visit - and it is already tame!"), TEXT("Питомец {0} пришёл в гости - и он уже ручной!")), FText::FromString(ViewerName))
-		: FText::Format(Tr(TEXT("{0}'s pet came to visit!"), TEXT("Питомец {0} пришёл в гости!")), FText::FromString(ViewerName)));
+	SetupPet(Pet, ViewerKey, ViewerName, At == nullptr);
 	return true;
 }
 

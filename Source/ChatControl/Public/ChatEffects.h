@@ -15,6 +15,8 @@ struct FChatEffectContext
 	const FChatEffectSettings* Settings = nullptr;
 	/** Who triggered it, for announcements */
 	FString ViewerName;
+	/** Economy key of who triggered it ("platform:id", or a system key for ADA, votes and the pot) */
+	FString ViewerKey;
 	/** Text after the command, original case (e.g. the message for !sign) */
 	FString Args;
 };

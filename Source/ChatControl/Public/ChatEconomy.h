@@ -12,6 +12,8 @@ struct FChatViewerRecord
 	UPROPERTY() int32 Chips = 0;
 	/** Lifetime chips spent, for the leaderboard */
 	UPROPERTY() int32 ChipsSpent = 0;
+	/** Local date (YYYY-MM-DD) of the last !daily */
+	UPROPERTY() FString LastDaily;
 
 	// Runtime only (not saved)
 	double LastMessageTime = -1.0;
@@ -44,6 +46,9 @@ public:
 
 	void AddChips(const FString& Key, const FString& DisplayName, int32 Amount);
 	bool TrySpend(const FString& Key, int32 Amount);
+	/** Gives Amount once per calendar day; false if already claimed today */
+	bool ClaimDaily(const FString& Key, const FString& DisplayName, int32 Amount);
+	const FChatViewerRecord* FindByName(const FString& DisplayName) const;
 
 	/** Gives Amount chips to everyone who wrote within ActiveWindow. Returns how many viewers were paid. */
 	int32 PayActiveViewers(double Now, double ActiveWindow, int32 Amount);

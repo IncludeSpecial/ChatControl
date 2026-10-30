@@ -104,6 +104,17 @@ struct FChatControlSettings
 	UPROPERTY() bool bCreatureNameTags = true;
 	/** Chance (0..1) that a pet arrives already tamed */
 	UPROPERTY() float PetTamedChance = 0.5f;
+	/** Pets never leave and are kept in the save ("subscriber zoo"); otherwise they leave after PetLifeSpanSeconds */
+	UPROPERTY() bool bPetPermanent = true;
+	/** A viewer's first message in a session shows their name next to the player */
+	UPROPERTY() bool bWelcomeEnabled = true;
+	UPROPERTY() float WelcomeSeconds = 8.f;
+	/** Chips for !daily, once per calendar day; 0 = off */
+	UPROPERTY() int32 DailyChips = 50;
+	/** Ranks by lifetime chips spent */
+	UPROPERTY() bool bRanksEnabled = true;
+	/** "spent=Name;spent=Name"; empty = built-in ranks in the current language */
+	UPROPERTY() FString Ranks;
 	/** Name tag colors by chat role (hex); viewers without a role keep the color of the thing they sent */
 	UPROPERTY() bool bRoleColors = true;
 	UPROPERTY() FString ColorBroadcaster = TEXT("#FF2A4A");

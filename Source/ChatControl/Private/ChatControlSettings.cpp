@@ -54,9 +54,22 @@ void FChatControlSettings::AddMissingEffectDefaults()
 		// Creatures
 		{ TEXT("ambush"),   MakeEffect(80,  60.f,  120.f, 0.f,  2, 0.f, 3, 3.f, 5.f) },
 		{ TEXT("boss"),     MakeEffect(300, 180.f, 300.f, 0.f,  4, 0.f, 1, 3.f, 5.f) },
+		// Body: fly Strength = hover height (m), shrink/giant Strength = scale
+		{ TEXT("fly"),      MakeEffect(60,  60.f,  120.f, 15.f, 1, 8.f) },
+		{ TEXT("shrink"),   MakeEffect(50,  60.f,  120.f, 30.f, 1, 0.4f) },
+		{ TEXT("giant"),    MakeEffect(50,  60.f,  120.f, 30.f, 1, 2.f) },
+		// hungry Strength = HP lost every 2 s until the player eats; fog Strength = fog density
+		{ TEXT("hungry"),   MakeEffect(80,  120.f, 300.f, 60.f, 2, 3.f) },
+		{ TEXT("inventory"), MakeEffect(100, 180.f, 600.f, 0.f, 2) },
+		{ TEXT("fog"),      MakeEffect(60,  120.f, 300.f, 60.f, 1, 0.2f) },
+		// Help: dance Strength = radius (m)
+		{ TEXT("dance"),    MakeEffect(40,  60.f,  120.f, 6.f,  0, 50.f) },
+		{ TEXT("heal"),     MakeEffect(80,  120.f, 300.f, 0.f,  0) },
+		// Viewers: a named machine stays in the save
+		{ TEXT("name"),     MakeEffect(200, 10.f,  600.f, 0.f,  0) },
 	};
 	// Free and personal effects make no sense as a random pick; channel point prices start at cost x 10
-	const TSet<FString> NotRandom = { TEXT("hi"), TEXT("gift"), TEXT("sign"), TEXT("pet"), TEXT("day") };
+	const TSet<FString> NotRandom = { TEXT("hi"), TEXT("gift"), TEXT("sign"), TEXT("pet"), TEXT("day"), TEXT("name") };
 	for (auto& Pair : Defaults)
 	{
 		Pair.Value.bRandomPool = !NotRandom.Contains(Pair.Key);

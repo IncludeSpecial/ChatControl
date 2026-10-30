@@ -16,13 +16,18 @@ Twitch needs no token (chat is read anonymously). YouTube needs a free YouTube D
 
 | Command | Who | What |
 |---|---|---|
-| `!chips` | everyone | your balance |
+| `!chips` | everyone | your balance and rank |
+| `!daily` | everyone | daily chip bonus |
 | `!effects` | everyone | effects and current prices |
 | `!hi`, `!gift` | everyone | free, with cooldowns |
 | `!biggift`, `!rain`, `!sink`, `!pet`, `!sign <text>`, `!day` | everyone | gifts and fun, paid with chips |
 | `!jump`, `!moon`, `!heavy`, `!speed`, `!slow`, `!fov`, `!teleport`, `!hub`, `!night` | everyone | player chaos |
 | `!strike`, `!underclock`, `!blackout` | everyone | factory chaos |
 | `!ambush`, `!boss` | everyone | creatures with the viewer's name above them |
+| `!fly`, `!shrink`, `!giant` | everyone | hover, tiny or giant player |
+| `!hungry`, `!inventory`, `!fog` | everyone | health drains until you eat, shuffled inventory, thick fog |
+| `!dance`, `!heal` | everyone | freeze nearby creatures, full health |
+| `!name` | everyone | sign the machine the streamer looks at; stays in the save |
 | `!1` `!2` `!3` / `!vote N` | everyone | vote for the next effect |
 | `!pot <chips>` | everyone | chip into the shared pot |
 | `!top`, `!stats` | everyone | leaderboard, session stats |

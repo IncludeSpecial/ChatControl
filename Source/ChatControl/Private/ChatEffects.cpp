@@ -17,6 +17,9 @@
 #include "EngineUtils.h"
 #include "Camera/PlayerCameraManager.h"
 #include "ChatText.h"
+#include "FGHealthComponent.h"
+#include "Components/ExponentialHeightFogComponent.h"
+#include "UObject/UObjectIterator.h"
 
 using ChatText::Tr;
 
@@ -143,7 +146,7 @@ namespace
 			Subsystem->TrackSpawned(Creature);
 			if (Settings.bCreatureNameTags)
 			{
-				Subsystem->AttachNameTag(Creature, ViewerName, Subsystem->GetNameColor(ViewerName, FColor(255, 90, 60)), 160.f);
+				Subsystem->AttachNameTag(Creature, Subsystem->GetTagText(ViewerName), Subsystem->GetNameColor(ViewerName, FColor(255, 90, 60)), 160.f);
 			}
 			UE_LOG(LogChatControl, Log, TEXT("Spawned %s %.0f m from player, enabled=%d, controller=%s"),
 				*CreatureClass->GetName(), FVector::Dist(Location, Player->GetActorLocation()) / 100.f,
@@ -692,6 +695,244 @@ TMap<FString, FChatEffect> ChatEffects::CreateAll()
 		return SpawnCreaturesDelayed(Ctx, BossCreaturePool,
 			Tr(TEXT("{0} is summoning a BOSS in {2} s!"), TEXT("{0} призывает БОССА через {2} с!")),
 			Tr(TEXT("The BOSS from {1} is here! Run!"), TEXT("БОСС от {1} уже здесь! Беги!")));
+	});
+
+	Add(TEXT("fly"), true, [](const FChatEffectContext& Ctx)
+	{
+		if (!Ctx.Player->GetCharacterMovement())
+		{
+			return false;
+		}
+		UChatControlSubsystem* Subsystem = Ctx.Subsystem;
+		const float TargetZ = Ctx.Player->GetActorLocation().Z + FMath::Clamp(Ctx.Settings->Strength, 1.f, 50.f) * 100.f;
+		// Pull towards the hover height every tick; walking is switched to falling so the lift can start
+		Subsystem->StartTimedEffect(TEXT("fly"), Ctx.Settings->Duration,
+			[Subsystem, TargetZ]
+			{
+				AFGCharacterPlayer* Player = Subsystem->FindPlayer();
+				UCharacterMovementComponent* Movement = Player ? Player->GetCharacterMovement() : nullptr;
+				if (!Movement)
+				{
+					return;
+				}
+				if (Movement->IsMovingOnGround())
+				{
+					Movement->SetMovementMode(MOVE_Falling);
+				}
+				Movement->Velocity.Z = FMath::Clamp((TargetZ - Player->GetActorLocation().Z) * 3.f, -400.f, 800.f);
+			},
+			[Subsystem]
+			{
+				// A soft landing instead of fall damage
+				Subsystem->StartTimedEffect(TEXT("softfall"), 8.f,
+					[Subsystem]
+					{
+						AFGCharacterPlayer* Player = Subsystem->FindPlayer();
+						UCharacterMovementComponent* Movement = Player ? Player->GetCharacterMovement() : nullptr;
+						if (Movement && Movement->Velocity.Z < -500.f)
+						{
+							Movement->Velocity.Z = -500.f;
+						}
+					},
+					[] {});
+			});
+		Subsystem->Announce(FText::Format(Tr(TEXT("{0} lifted you into the air for {1} s!"), TEXT("{0} поднимает тебя в воздух на {1} с!")),
+			FText::FromString(Ctx.ViewerName), FText::AsNumber(FMath::RoundToInt(Ctx.Settings->Duration))));
+		return true;
+	});
+
+	auto Resize = [](const FChatEffectContext& Ctx, const FText& Message)
+	{
+		UChatControlSubsystem* Subsystem = Ctx.Subsystem;
+		const float Scale = FMath::Clamp(Ctx.Settings->Strength, 0.2f, 4.f);
+		Subsystem->StartTimedEffect(TEXT("size"), Ctx.Settings->Duration,
+			[Subsystem, Scale]
+			{
+				if (AFGCharacterPlayer* Player = Subsystem->FindPlayer(); Player && !Player->GetActorScale3D().Equals(FVector(Scale)))
+				{
+					Player->SetActorScale3D(FVector(Scale));
+				}
+			},
+			[Subsystem]
+			{
+				if (AFGCharacterPlayer* Player = Subsystem->FindPlayer())
+				{
+					Player->SetActorScale3D(FVector::OneVector);
+				}
+			});
+		Subsystem->Announce(Message);
+		return true;
+	};
+	Add(TEXT("shrink"), true, [Resize](const FChatEffectContext& Ctx)
+	{
+		return Resize(Ctx, FText::Format(Tr(TEXT("{0} shrank you for {1} s!"), TEXT("{0} уменьшает тебя на {1} с!")),
+			FText::FromString(Ctx.ViewerName), FText::AsNumber(FMath::RoundToInt(Ctx.Settings->Duration))));
+	});
+	Add(TEXT("giant"), true, [Resize](const FChatEffectContext& Ctx)
+	{
+		return Resize(Ctx, FText::Format(Tr(TEXT("{0} made you a giant for {1} s!"), TEXT("{0} делает тебя великаном на {1} с!")),
+			FText::FromString(Ctx.ViewerName), FText::AsNumber(FMath::RoundToInt(Ctx.Settings->Duration))));
+	});
+
+	Add(TEXT("hungry"), true, [](const FChatEffectContext& Ctx)
+	{
+		UFGHealthComponent* Health = Ctx.Player->GetHealthComponent();
+		if (!Health)
+		{
+			return false;
+		}
+		UChatControlSubsystem* Subsystem = Ctx.Subsystem;
+		const float Damage = FMath::Max(0.5f, Ctx.Settings->Strength);
+		TSharedRef<float> LastHealth = MakeShared<float>(Health->GetCurrentHealth());
+		TSharedRef<double> NextBite = MakeShared<double>(FPlatformTime::Seconds() + 2.0);
+		TSharedRef<bool> bFed = MakeShared<bool>(false);
+		// Health drops every 2 s; any healing (berries, nuts, medicine) ends the hunger. Never kills: stops at 10%.
+		Subsystem->StartTimedEffect(TEXT("hungry"), Ctx.Settings->Duration,
+			[Subsystem, Damage, LastHealth, NextBite, bFed]
+			{
+				AFGCharacterPlayer* Player = Subsystem->FindPlayer();
+				UFGHealthComponent* Health = Player ? Player->GetHealthComponent() : nullptr;
+				if (*bFed || !Health || Health->IsDead())
+				{
+					return;
+				}
+				const float Current = Health->GetCurrentHealth();
+				if (Current > *LastHealth + 0.1f)
+				{
+					*bFed = true;
+					Subsystem->Announce(Tr(TEXT("You ate something - the hunger is gone."), TEXT("Ты поел(а) - голод прошёл.")));
+					return;
+				}
+				const double Now = FPlatformTime::Seconds();
+				const float Floor = Health->GetMaxHealth() * 0.1f;
+				if (Now >= *NextBite && Current > Floor)
+				{
+					*NextBite = Now + 2.0;
+					Health->TakeDamage(Player, FMath::Min(Damage, Current - Floor), GetDefault<UDamageType>(), nullptr, nullptr);
+				}
+				*LastHealth = Health->GetCurrentHealth();
+			},
+			[] {});
+		Subsystem->Announce(FText::Format(Tr(TEXT("{0} made you starving! Eat something to stop it."), TEXT("{0} морит тебя голодом! Съешь что-нибудь, чтобы это прекратить.")),
+			FText::FromString(Ctx.ViewerName)));
+		return true;
+	});
+
+	Add(TEXT("inventory"), true, [](const FChatEffectContext& Ctx)
+	{
+		UFGInventoryComponent* Inventory = Ctx.Player->GetInventory();
+		if (!Inventory || Inventory->IsEmpty())
+		{
+			return false;
+		}
+		const int32 Size = Inventory->GetSizeLinear();
+		TArray<FInventoryStack> Slots;
+		Slots.SetNum(Size);
+		for (int32 i = 0; i < Size; ++i)
+		{
+			Inventory->GetStackFromIndex(i, Slots[i]);
+		}
+		for (int32 i = Size - 1; i > 0; --i)
+		{
+			Slots.Swap(i, FMath::RandRange(0, i));
+		}
+		for (int32 i = 0; i < Size; ++i)
+		{
+			Inventory->RemoveAllFromIndex(i);
+		}
+		for (int32 i = 0; i < Size; ++i)
+		{
+			if (Slots[i].HasItems())
+			{
+				Inventory->AddStackToIndex(i, Slots[i], true);
+			}
+		}
+		Ctx.Subsystem->Announce(FText::Format(Tr(TEXT("{0} shuffled your inventory!"), TEXT("{0} перемешивает твой инвентарь!")), FText::FromString(Ctx.ViewerName)));
+		return true;
+	});
+
+	Add(TEXT("fog"), true, [](const FChatEffectContext& Ctx)
+	{
+		UChatControlSubsystem* Subsystem = Ctx.Subsystem;
+		TWeakObjectPtr<UWorld> World = Ctx.World;
+		const float Density = FMath::Clamp(Ctx.Settings->Strength, 0.01f, 1.f);
+		// The atmosphere updates fog from biome curves, so it is overridden every tick and released at the end
+		Subsystem->StartTimedEffect(TEXT("fog"), Ctx.Settings->Duration,
+			[World, Density]
+			{
+				for (TObjectIterator<UExponentialHeightFogComponent> It; It; ++It)
+				{
+					if (It->GetWorld() == World.Get())
+					{
+						It->SetFogDensity(Density);
+						It->SetFogHeightFalloff(0.001f);
+						It->SetStartDistance(0.f);
+					}
+				}
+			},
+			[] {});
+		Subsystem->Announce(FText::Format(Tr(TEXT("{0} brought thick fog for {1} s!"), TEXT("{0} напускает густой туман на {1} с!")),
+			FText::FromString(Ctx.ViewerName), FText::AsNumber(FMath::RoundToInt(Ctx.Settings->Duration))));
+		return true;
+	});
+
+	Add(TEXT("dance"), false, [](const FChatEffectContext& Ctx)
+	{
+		const float Radius = FMath::Max(5.f, Ctx.Settings->Strength) * 100.f;
+		TArray<TWeakObjectPtr<AActor>> Frozen;
+		for (TActorIterator<AFGCreature> It(Ctx.World); It; ++It)
+		{
+			if (FVector::Dist(It->GetActorLocation(), Ctx.Player->GetActorLocation()) < Radius)
+			{
+				Frozen.Add(*It);
+			}
+		}
+		if (Frozen.Num() == 0)
+		{
+			Ctx.Subsystem->Announce(FText::Format(Tr(TEXT("{0} wanted to stop the creatures, but there are none around."), TEXT("{0} хотел(а) остановить существ, но рядом никого нет.")), FText::FromString(Ctx.ViewerName)));
+			return false;
+		}
+		Ctx.Subsystem->StartTimedEffect(TEXT("dance"), Ctx.Settings->Duration,
+			[Frozen]
+			{
+				for (const TWeakObjectPtr<AActor>& Actor : Frozen)
+				{
+					if (Actor.IsValid())
+					{
+						Actor->CustomTimeDilation = 0.001f;
+					}
+				}
+			},
+			[Frozen]
+			{
+				for (const TWeakObjectPtr<AActor>& Actor : Frozen)
+				{
+					if (Actor.IsValid())
+					{
+						Actor->CustomTimeDilation = 1.f;
+					}
+				}
+			});
+		Ctx.Subsystem->Announce(FText::Format(Tr(TEXT("{0} froze {1} creatures for {2} s! Run!"), TEXT("{0} замораживает существ ({1}) на {2} с! Беги!")),
+			FText::FromString(Ctx.ViewerName), FText::AsNumber(Frozen.Num()), FText::AsNumber(FMath::RoundToInt(Ctx.Settings->Duration))));
+		return true;
+	});
+
+	Add(TEXT("heal"), false, [](const FChatEffectContext& Ctx)
+	{
+		UFGHealthComponent* Health = Ctx.Player->GetHealthComponent();
+		if (!Health || Health->IsDead())
+		{
+			return false;
+		}
+		Health->Heal(Health->GetMaxHealth());
+		Ctx.Subsystem->Announce(FText::Format(Tr(TEXT("{0} healed you!"), TEXT("{0} лечит тебя!")), FText::FromString(Ctx.ViewerName)));
+		return true;
+	});
+
+	Add(TEXT("name"), false, [](const FChatEffectContext& Ctx)
+	{
+		return Ctx.Subsystem->NameBuilding(Ctx.ViewerKey, Ctx.ViewerName);
 	});
 
 	return Effects;

@@ -8,10 +8,14 @@
 #include "ChatEconomy.h"
 #include "ChatEffects.h"
 #include "ChatControlSettings.h"
+#include "ChatWorldData.h"
 #include "HttpRouteHandle.h"
 #include "ChatControlSubsystem.generated.h"
 
 class FTwitchIrcConnector;
+
+/** The lizard doggo used for viewer pets */
+static const TCHAR* const PetClassPath = TEXT("/Game/FactoryGame/Character/Creature/Wildlife/SpaceRabbit/Char_SpaceRabbit.Char_SpaceRabbit_C");
 class AFGCharacterPlayer;
 
 /**
@@ -70,8 +74,12 @@ public:
 	class UTextRenderComponent* AttachNameTag(AActor* Target, const FString& Text, const FColor& Color, float Height);
 	/** Name tag color for a viewer: their chat role color, or Default for viewers without a role */
 	FColor GetNameColor(const FString& ViewerName, const FColor& Default) const;
-	/** Spawns (or replaces) the viewer's named pet next to the player */
-	bool SpawnPet(const FString& ViewerKey, const FString& ViewerName);
+	/** Spawns (or replaces) the viewer's named pet next to the player, or at At when restoring a save */
+	bool SpawnPet(const FString& ViewerKey, const FString& ViewerName, const FVector* At = nullptr);
+	/** Name tag text: the viewer's name plus their rank on a second line */
+	FString GetTagText(const FString& ViewerName) const;
+	/** Puts the viewer's name over the machine the player looks at (or the nearest one); kept in the save */
+	bool NameBuilding(const FString& ViewerKey, const FString& ViewerName);
 
 private:
 	struct FPendingChaos
@@ -99,7 +107,7 @@ private:
 	/** Validates cooldowns and price, then runs or queues the effect. bFree skips the price (rewards, raids, Auto-Chaos). */
 	void RequestEffect(const FString& EffectId, const FString& ViewerKey, const FString& ViewerName, bool bFree, const FString& Args = FString());
 	/** Returns false if the effect could not run right now */
-	bool ExecuteEffect(const FChatEffect& Effect, const FString& ViewerName, const FString& Args = FString());
+	bool ExecuteEffect(const FChatEffect& Effect, const FString& ViewerKey, const FString& ViewerName, const FString& Args = FString());
 	/** Keeps name tags readable by turning them to the camera */
 	void TickNameTags();
 	void TickTwitchApi(double Now);
@@ -190,6 +198,30 @@ private:
 	bool TryTamePet(APawn* Pet, AActor* Owner) const;
 	/** Writes the viewer's name into the doggo's own blueprint name (its built-in name tag) */
 	bool TryNamePet(APawn* Pet, const FString& Name) const;
+
+	// Viewers (ChatControlViewers.cpp)
+	/** Shows a greeting with the viewer's name next to the player */
+	void WelcomeViewer(const FString& ViewerName);
+	/** Rank for lifetime chips spent; empty when ranks are off */
+	FString GetRank(int32 ChipsSpent) const;
+	/** Announces a new rank if spending moved the viewer up */
+	void CheckRankUp(const FString& ViewerKey, int32 SpentBefore);
+	/** Gives a pet its tag, persistence and maybe tameness */
+	void SetupPet(APawn* Pet, const FString& ViewerKey, const FString& ViewerName, bool bAnnounce);
+	void TickWorldData(double Now);
+	void ApplyWorldData();
+	void SaveWorldData();
+	FChatWorldMark& FindOrAddMark(TArray<FChatWorldMark>& Marks, const FString& ViewerKey, const FString& ViewerName);
+
+	FChatWorldData WorldData;
+	FString WorldDataPath;
+	TWeakObjectPtr<UWorld> LoadedWorld;
+	bool bWorldApplied = false;
+	double WorldApplyTime = 0.0;
+	double NextWorldSave = 0.0;
+	/** viewer key -> their named machine */
+	TMap<FString, TWeakObjectPtr<AActor>> NamedBuildings;
+	TMap<FString, TWeakObjectPtr<class UTextRenderComponent>> BuildingTags;
 
 	TMap<FString, double> GlobalCooldownUntil;
 	/** Key: viewerKey|effectId */

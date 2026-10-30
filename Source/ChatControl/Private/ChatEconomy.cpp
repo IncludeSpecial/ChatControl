@@ -61,6 +61,32 @@ void FChatEconomy::AddChips(const FString& Key, const FString& DisplayName, int3
 	bDirty = true;
 }
 
+bool FChatEconomy::ClaimDaily(const FString& Key, const FString& DisplayName, int32 Amount)
+{
+	FChatViewerRecord& Record = GetOrAdd(Key, DisplayName);
+	const FString Today = FDateTime::Now().ToString(TEXT("%Y-%m-%d"));
+	if (Record.LastDaily == Today)
+	{
+		return false;
+	}
+	Record.LastDaily = Today;
+	Record.Chips += Amount;
+	bDirty = true;
+	return true;
+}
+
+const FChatViewerRecord* FChatEconomy::FindByName(const FString& DisplayName) const
+{
+	for (const auto& Pair : Data.Viewers)
+	{
+		if (Pair.Value.DisplayName.Equals(DisplayName, ESearchCase::IgnoreCase))
+		{
+			return &Pair.Value;
+		}
+	}
+	return nullptr;
+}
+
 bool FChatEconomy::TrySpend(const FString& Key, int32 Amount)
 {
 	FChatViewerRecord* Record = Data.Viewers.Find(Key);

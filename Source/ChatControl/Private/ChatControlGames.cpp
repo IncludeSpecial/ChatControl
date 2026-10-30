@@ -76,6 +76,8 @@ void UChatControlSubsystem::HandlePotCommand(const FChatEvent& Event, const FStr
 	const int32 Amount = FCString::Atoi(*Args);
 	if (Amount > 0)
 	{
+		const FChatViewerRecord* Before = Economy.Find(Key);
+		const int32 SpentBefore = Before ? Before->ChipsSpent : 0;
 		if (!Economy.TrySpend(Key, Amount))
 		{
 			const FChatViewerRecord* Record = Economy.Find(Key);
@@ -84,6 +86,7 @@ void UChatControlSubsystem::HandlePotCommand(const FChatEvent& Event, const FStr
 			return;
 		}
 		Economy.AddToPot(Amount);
+		CheckRankUp(Key, SpentBefore);
 	}
 
 	if (Economy.GetPot() >= Settings.GoalChips)
