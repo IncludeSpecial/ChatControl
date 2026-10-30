@@ -7,6 +7,7 @@
 #include "FGCharacterPlayer.h"
 #include "EngineUtils.h"
 #include "GameFramework/GameStateBase.h"
+#include "Buildables/FGBuildableTradingPost.h"
 #include "ChatText.h"
 
 using ChatText::Tr;
@@ -325,6 +326,12 @@ void UChatControlSubsystem::HandleCommand(const FChatEvent& Event)
 		return;
 	}
 
+	if (Command == TEXT("panic") && bCanModerate)
+	{
+		Panic();
+		return;
+	}
+
 	if (Command == TEXT("test") && Event.bIsBroadcaster)
 	{
 		HandleTestCommand(Event, Args);
@@ -484,28 +491,34 @@ void UChatControlSubsystem::TickChaosQueue(double Now)
 {
 	ChaosHistory.RemoveAll([Now](const TPair<double, int32>& Entry) { return Now - Entry.Key >= 60.0; });
 
-	if (ChaosQueue.Num() == 0 || bChaosPaused || Now - LastDeathTime < Settings.DeathProtectionSeconds)
+	if (ChaosQueue.Num() == 0 || bChaosPaused || Now - LastDeathTime < Settings.DeathProtectionSeconds || Now < NextChaosAttempt)
 	{
 		return;
 	}
+	NextChaosAttempt = Now + 0.5;
 
-	const FPendingChaos& Next = ChaosQueue[0];
-	const FChatEffect* Effect = Effects.Find(Next.EffectId);
-	const FChatEffectSettings* EffectSettings = Settings.Effects.Find(Next.EffectId);
-	if (!Effect || !EffectSettings)
+	// First request that fits the budget and can run now wins; others (e.g. creatures in the safe zone) keep waiting
+	const int32 BudgetLeft = Settings.ChaosBudgetPerMinute - GetChaosBudgetUsed(Now);
+	for (int32 i = 0; i < ChaosQueue.Num(); ++i)
 	{
-		ChaosQueue.RemoveAt(0);
-		return;
-	}
-	if (GetChaosBudgetUsed(Now) + EffectSettings->ChaosWeight > Settings.ChaosBudgetPerMinute)
-	{
-		return;
-	}
-	// Keep the request queued while there is no player (loading screen, main menu)
-	if (ExecuteEffect(*Effect, Next.ViewerName))
-	{
-		ChaosHistory.Add({ Now, EffectSettings->ChaosWeight });
-		ChaosQueue.RemoveAt(0);
+		const FPendingChaos& Pending = ChaosQueue[i];
+		const FChatEffect* Effect = Effects.Find(Pending.EffectId);
+		const FChatEffectSettings* EffectSettings = Settings.Effects.Find(Pending.EffectId);
+		if (!Effect || !EffectSettings)
+		{
+			ChaosQueue.RemoveAt(i);
+			return;
+		}
+		if (EffectSettings->ChaosWeight > BudgetLeft)
+		{
+			continue;
+		}
+		if (ExecuteEffect(*Effect, Pending.ViewerName))
+		{
+			ChaosHistory.Add({ Now, EffectSettings->ChaosWeight });
+			ChaosQueue.RemoveAt(i);
+			return;
+		}
 	}
 }
 
@@ -552,7 +565,50 @@ int32 UChatControlSubsystem::GetScaledCost(int32 BaseCost, double Now) const
 {
 	const int32 Active = FMath::Max(1, Economy.CountActiveViewers(Now, Settings.ActiveWindowSeconds));
 	const float Multiplier = FMath::Min(1.f + Settings.CostScalePerViewer * (Active - 1), Settings.MaxCostMultiplier);
-	return FMath::RoundToInt(BaseCost * Multiplier);
+	return FMath::RoundToInt(BaseCost * Multiplier * Settings.GetPriceMultiplier());
+}
+
+bool UChatControlSubsystem::GetHubLocation(FVector& OutLocation) const
+{
+	UWorld* World = GetGameWorld();
+	for (TActorIterator<AFGBuildableTradingPost> It(World); World && It; ++It)
+	{
+		OutLocation = It->GetActorLocation();
+		return true;
+	}
+	return false;
+}
+
+bool UChatControlSubsystem::IsInSafeZone() const
+{
+	FVector Hub;
+	const AFGCharacterPlayer* Player = FindPlayer();
+	return Settings.SafeZoneRadius > 0.f && Player && GetHubLocation(Hub) &&
+		FVector::Dist2D(Player->GetActorLocation(), Hub) < Settings.SafeZoneRadius * 100.f;
+}
+
+void UChatControlSubsystem::Panic()
+{
+	const int32 Removed = ChaosQueue.Num() + DelayedActions.Num();
+	ChaosQueue.Empty();
+	DelayedActions.Empty();
+	for (auto& Pair : TimedEffects)
+	{
+		Pair.Value.Revert();
+	}
+	TimedEffects.Empty();
+	int32 Creatures = 0;
+	for (const TWeakObjectPtr<AActor>& Actor : SpawnedActors)
+	{
+		if (Actor.IsValid())
+		{
+			Actor->Destroy();
+			++Creatures;
+		}
+	}
+	SpawnedActors.Empty();
+	Announce(FText::Format(Tr(TEXT("PANIC! Chaos cancelled: {0} queued effects, {1} creatures removed."),
+		TEXT("ПАНИКА! Хаос отменён: убрано {0} эффектов из очереди и {1} существ.")), FText::AsNumber(Removed), FText::AsNumber(Creatures)));
 }
 
 int32 UChatControlSubsystem::GetChaosBudgetUsed(double Now) const

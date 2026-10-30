@@ -7,6 +7,9 @@
 #include "Resources/FGItemDescriptor.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Creature/FGCreature.h"
+#include "Buildables/FGBuildableManufacturer.h"
+#include "EngineUtils.h"
+#include "Camera/PlayerCameraManager.h"
 #include "ChatText.h"
 
 using ChatText::Tr;
@@ -80,7 +83,7 @@ namespace
 	}
 
 	template <int32 N>
-	int32 SpawnCreatures(UWorld* World, const AFGCharacterPlayer* Player, const FChatControlSettings& Settings, const TCHAR* (&Pool)[N], int32 Count)
+	int32 SpawnCreatures(UChatControlSubsystem* Subsystem, UWorld* World, const AFGCharacterPlayer* Player, const FChatControlSettings& Settings, const TCHAR* (&Pool)[N], int32 Count)
 	{
 		int32 Spawned = 0;
 		for (int32 i = 0; i < Count; ++i)
@@ -111,6 +114,7 @@ namespace
 				FGCreature->SetIsPersistent(true);
 			}
 			Creature->SetLifeSpan(FMath::Max(10.f, Settings.CreatureLifeSpanSeconds));
+			Subsystem->TrackSpawned(Creature);
 			UE_LOG(LogChatControl, Log, TEXT("Spawned %s %.0f m from player, enabled=%d, controller=%s"),
 				*CreatureClass->GetName(), FVector::Dist(Location, Player->GetActorLocation()) / 100.f,
 				FGCreature ? FGCreature->GetIsEnabled() : -1, *GetNameSafe(Creature->GetController()));
@@ -130,7 +134,12 @@ namespace
 	template <int32 N>
 	bool SpawnCreaturesDelayed(const FChatEffectContext& Ctx, const TCHAR* (&Pool)[N], const FText& Warning, const FText& Arrival)
 	{
-		const int32 Count = FMath::Max(1, Ctx.Settings->Amount);
+		// Near the base creatures wait in the chaos queue until the player leaves
+		if (Ctx.Subsystem->IsInSafeZone())
+		{
+			return false;
+		}
+		const int32 Count = FMath::Max(1, FMath::RoundToInt(Ctx.Settings->Amount * Ctx.Subsystem->GetSettings().GetCreatureMultiplier()));
 		const float Delay = FMath::Max(0.f, FMath::FRandRange(Ctx.Settings->DelayMin, FMath::Max(Ctx.Settings->DelayMin, Ctx.Settings->DelayMax)));
 		UChatControlSubsystem* Subsystem = Ctx.Subsystem;
 		const FString Viewer = Ctx.ViewerName;
@@ -143,7 +152,7 @@ namespace
 			{
 				return;
 			}
-			const int32 Spawned = SpawnCreatures(World, Player, Subsystem->GetSettings(), Pool, Count);
+			const int32 Spawned = SpawnCreatures(Subsystem, World, Player, Subsystem->GetSettings(), Pool, Count);
 			if (Spawned > 0)
 			{
 				Subsystem->Announce(FText::Format(Arrival, FText::AsNumber(Spawned), FText::FromString(Viewer)));
@@ -229,6 +238,52 @@ namespace
 		return true;
 	}
 
+	/** Speeds the player up or slows them down through actor time dilation (movement, animations, jumps) */
+	bool ScaleTimeTemporarily(const FChatEffectContext& Ctx, const FText& Message)
+	{
+		if (!Ctx.Player)
+		{
+			return false;
+		}
+		UChatControlSubsystem* Subsystem = Ctx.Subsystem;
+		const float Dilation = FMath::Clamp(Ctx.Settings->Strength, 0.1f, 5.f);
+		Subsystem->StartTimedEffect(TEXT("time"), Ctx.Settings->Duration,
+			[Subsystem, Dilation]
+			{
+				if (AFGCharacterPlayer* Player = Subsystem->FindPlayer())
+				{
+					Player->CustomTimeDilation = Dilation;
+				}
+			},
+			[Subsystem]
+			{
+				if (AFGCharacterPlayer* Player = Subsystem->FindPlayer())
+				{
+					Player->CustomTimeDilation = 1.f;
+				}
+			});
+		Subsystem->Announce(Message);
+		return true;
+	}
+
+	/** Teleports to ground near Center, trying a ring of the given radius; traces from high above so it works on uneven terrain */
+	bool TeleportNear(AFGCharacterPlayer* Player, UWorld* World, const FVector& Center, float RadiusMin, float RadiusMax)
+	{
+		FCollisionQueryParams Params(TEXT("ChatControlTeleport"), false, Player);
+		for (int32 Attempt = 0; Attempt < 16; ++Attempt)
+		{
+			const float Angle = FMath::FRandRange(0.f, 2.f * PI);
+			const FVector Probe = Center + FVector(FMath::Cos(Angle), FMath::Sin(Angle), 0.f) * FMath::FRandRange(RadiusMin, RadiusMax);
+			FHitResult Ground;
+			if (World->LineTraceSingleByChannel(Ground, Probe + FVector(0, 0, 5000.f), Probe - FVector(0, 0, 10000.f), ECC_Visibility, Params) &&
+				Player->TeleportTo(Ground.ImpactPoint + FVector(0, 0, 150.f), Player->GetActorRotation()))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
 	/** Multiplies the vertical speed at the moment the player leaves the ground with upward speed (a jump) */
 	bool BoostJumpsTemporarily(const FChatEffectContext& Ctx, float Multiplier, const FText& Message)
 	{
@@ -303,6 +358,112 @@ TMap<FString, FChatEffect> ChatEffects::CreateAll()
 		return ScaleGravityTemporarily(Ctx, Ctx.Settings->Strength,
 			FText::Format(Tr(TEXT("{0} made you heavy for {1} s!"), TEXT("{0} делает тебя тяжёлым на {1} с!")),
 				FText::FromString(Ctx.ViewerName), FText::AsNumber(FMath::RoundToInt(Ctx.Settings->Duration))));
+	});
+
+	Add(TEXT("speed"), true, [](const FChatEffectContext& Ctx)
+	{
+		return ScaleTimeTemporarily(Ctx,
+			FText::Format(Tr(TEXT("{0} put you in fast-forward for {1} s!"), TEXT("{0} ускоряет тебя на {1} с!")),
+				FText::FromString(Ctx.ViewerName), FText::AsNumber(FMath::RoundToInt(Ctx.Settings->Duration))));
+	});
+
+	Add(TEXT("slow"), true, [](const FChatEffectContext& Ctx)
+	{
+		return ScaleTimeTemporarily(Ctx,
+			FText::Format(Tr(TEXT("{0} put you in slow motion for {1} s!"), TEXT("{0} замедляет тебя на {1} с!")),
+				FText::FromString(Ctx.ViewerName), FText::AsNumber(FMath::RoundToInt(Ctx.Settings->Duration))));
+	});
+
+	Add(TEXT("fov"), true, [](const FChatEffectContext& Ctx)
+	{
+		APlayerController* Controller = Ctx.World->GetFirstPlayerController();
+		APlayerCameraManager* Camera = Controller ? Controller->PlayerCameraManager.Get() : nullptr;
+		if (!Camera)
+		{
+			return false;
+		}
+		TWeakObjectPtr<APlayerCameraManager> WeakCamera = Camera;
+		const float TargetFOV = FMath::Clamp(Camera->GetFOVAngle() * Ctx.Settings->Strength, 20.f, 170.f);
+		Ctx.Subsystem->StartTimedEffect(TEXT("fov"), Ctx.Settings->Duration,
+			[WeakCamera, TargetFOV]
+			{
+				if (WeakCamera.IsValid())
+				{
+					WeakCamera->SetFOV(TargetFOV);
+				}
+			},
+			[WeakCamera]
+			{
+				if (WeakCamera.IsValid())
+				{
+					WeakCamera->UnlockFOV();
+				}
+			});
+		Ctx.Subsystem->Announce(FText::Format(Tr(TEXT("{0} bent your camera for {1} s!"), TEXT("{0} искривляет тебе камеру на {1} с!")),
+			FText::FromString(Ctx.ViewerName), FText::AsNumber(FMath::RoundToInt(Ctx.Settings->Duration))));
+		return true;
+	});
+
+	Add(TEXT("teleport"), true, [](const FChatEffectContext& Ctx)
+	{
+		const float Distance = FMath::Max(5.f, Ctx.Settings->Strength) * 100.f;
+		if (!TeleportNear(Ctx.Player, Ctx.World, Ctx.Player->GetActorLocation(), Distance * 0.75f, Distance * 1.25f))
+		{
+			return false;
+		}
+		Ctx.Subsystem->Announce(FText::Format(Tr(TEXT("{0} teleported you somewhere!"), TEXT("{0} телепортирует тебя куда-то!")), FText::FromString(Ctx.ViewerName)));
+		return true;
+	});
+
+	Add(TEXT("hub"), true, [](const FChatEffectContext& Ctx)
+	{
+		FVector Hub;
+		if (!Ctx.Subsystem->GetHubLocation(Hub) || !TeleportNear(Ctx.Player, Ctx.World, Hub, 800.f, 1500.f))
+		{
+			return false;
+		}
+		Ctx.Subsystem->Announce(FText::Format(Tr(TEXT("{0} sent you back to the HUB!"), TEXT("{0} отправляет тебя обратно к ХАБу!")), FText::FromString(Ctx.ViewerName)));
+		return true;
+	});
+
+	Add(TEXT("strike"), true, [](const FChatEffectContext& Ctx)
+	{
+		TArray<AFGBuildableManufacturer*> Working;
+		for (TActorIterator<AFGBuildableManufacturer> It(Ctx.World); It; ++It)
+		{
+			if (!It->IsProductionPaused())
+			{
+				Working.Add(*It);
+			}
+		}
+		if (Working.Num() == 0)
+		{
+			return false;
+		}
+		// Only machines paused by the strike are resumed, the player's own pauses stay untouched
+		TArray<TWeakObjectPtr<AFGBuildableManufacturer>> Striking;
+		const int32 Count = FMath::Min(Working.Num(), FMath::Max(1, Ctx.Settings->Amount));
+		for (int32 i = 0; i < Count; ++i)
+		{
+			AFGBuildableManufacturer* Machine = Working[FMath::RandRange(i, Working.Num() - 1)];
+			Working.Swap(i, Working.IndexOfByKey(Machine));
+			Machine->SetIsProductionPaused(true);
+			Striking.Add(Machine);
+		}
+		Ctx.Subsystem->StartTimedEffect(TEXT("strike"), Ctx.Settings->Duration, [] {},
+			[Striking]
+			{
+				for (const TWeakObjectPtr<AFGBuildableManufacturer>& Machine : Striking)
+				{
+					if (Machine.IsValid() && Machine->IsProductionPaused())
+					{
+						Machine->SetIsProductionPaused(false);
+					}
+				}
+			});
+		Ctx.Subsystem->Announce(FText::Format(Tr(TEXT("{0} started a strike: {1} machines stop for {2} s!"), TEXT("{0} устраивает забастовку: {1} машин стоят {2} с!")),
+			FText::FromString(Ctx.ViewerName), FText::AsNumber(Count), FText::AsNumber(FMath::RoundToInt(Ctx.Settings->Duration))));
+		return true;
 	});
 
 	Add(TEXT("ambush"), true, [](const FChatEffectContext& Ctx)

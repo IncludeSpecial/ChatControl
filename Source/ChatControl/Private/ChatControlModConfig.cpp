@@ -143,6 +143,12 @@ namespace
 		{ TEXT("jump"),    TEXT("Movement"),  TEXT("!jump - super jump"),        TEXT("!jump - супер-прыжок") },
 		{ TEXT("moon"),    TEXT("Movement"),  TEXT("!moon - moon gravity"),      TEXT("!moon - лунная гравитация") },
 		{ TEXT("heavy"),   TEXT("Movement"),  TEXT("!heavy - heavy gravity"),    TEXT("!heavy - тяжёлая гравитация") },
+		{ TEXT("speed"),   TEXT("Movement"),  TEXT("!speed - fast-forward"),     TEXT("!speed - ускорение") },
+		{ TEXT("slow"),    TEXT("Movement"),  TEXT("!slow - slow motion"),       TEXT("!slow - замедление") },
+		{ TEXT("fov"),     TEXT("Movement"),  TEXT("!fov - camera warp"),        TEXT("!fov - искривление камеры") },
+		{ TEXT("teleport"),TEXT("Movement"),  TEXT("!teleport - random teleport (strength = meters)"), TEXT("!teleport - случайный телепорт (сила = метры)") },
+		{ TEXT("hub"),     TEXT("Movement"),  TEXT("!hub - back to the HUB"),    TEXT("!hub - обратно к ХАБу") },
+		{ TEXT("strike"),  TEXT("Factory"),   TEXT("!strike - machines stop"),   TEXT("!strike - забастовка машин") },
 		{ TEXT("ambush"),  TEXT("Creatures"), TEXT("!ambush - enemy ambush"),    TEXT("!ambush - засада врагов") },
 		{ TEXT("boss"),    TEXT("Creatures"), TEXT("!boss - alpha monster"),     TEXT("!boss - альфа-монстр") },
 	};
@@ -151,7 +157,8 @@ namespace
 	{
 		if (Category == TEXT("Free"))     return Tr(TEXT("Free commands"), TEXT("Бесплатные команды"));
 		if (Category == TEXT("Gifts"))    return Tr(TEXT("Paid gifts"), TEXT("Подарки за чипы"));
-		if (Category == TEXT("Movement")) return Tr(TEXT("Chaos: movement"), TEXT("Хаос: движение"));
+		if (Category == TEXT("Movement")) return Tr(TEXT("Chaos: player"), TEXT("Хаос: игрок"));
+		if (Category == TEXT("Factory"))  return Tr(TEXT("Chaos: factory"), TEXT("Хаос: фабрика"));
 		return Tr(TEXT("Chaos: creatures"), TEXT("Хаос: существа"));
 	}
 }
@@ -191,6 +198,11 @@ void UChatControlModConfig::Register(UConfigManager* ConfigManager, const FChatC
 		Tr(TEXT("Language (auto / en / ru)"), TEXT("Язык (auto / en / ru)")),
 		Tr(TEXT("auto = same as the game. The settings page switches after restart."),
 		   TEXT("auto = как в игре. Страница настроек переключится после перезапуска.")));
+
+	AddInt(Main, TEXT("Difficulty"), Defaults.Difficulty,
+		Tr(TEXT("Difficulty (1-3)"), TEXT("Сложность (1-3)")),
+		Tr(TEXT("1 = easy: prices x1.5, half the creatures. 2 = normal. 3 = hardcore: prices x0.6, double creatures."),
+		   TEXT("1 = лёгкая: цены x1.5, существ вдвое меньше. 2 = обычная. 3 = хардкор: цены x0.6, существ вдвое больше.")));
 
 	// --- Chips ---
 	UConfigPropertySection* Economy = AddSection(Root, TEXT("Economy"), Tr(TEXT("FICSIT Chips"), TEXT("Чипы FICSIT")));
@@ -285,6 +297,9 @@ void UChatControlModConfig::Register(UConfigManager* ConfigManager, const FChatC
 		Tr(TEXT("Price growth per viewer (%)"), TEXT("Рост цен за зрителя (%)")));
 	AddFloat(Advanced, TEXT("MaxCostMultiplier"), Defaults.MaxCostMultiplier,
 		Tr(TEXT("Max price multiplier"), TEXT("Макс. множитель цен")));
+	AddFloat(Advanced, TEXT("SafeZoneRadius"), Defaults.SafeZoneRadius,
+		Tr(TEXT("Safe zone around the HUB (m)"), TEXT("Безопасная зона у ХАБа (м)")),
+		Tr(TEXT("Creatures wait while you are this close to the HUB. 0 = off"), TEXT("Существа ждут, пока ты ближе к ХАБу. 0 = выключено")));
 	AddFloat(Advanced, TEXT("SpawnDistanceMin"), Defaults.SpawnDistanceMin,
 		Tr(TEXT("Creatures spawn from (m)"), TEXT("Существа появляются от (м)")));
 	AddFloat(Advanced, TEXT("SpawnDistanceMax"), Defaults.SpawnDistanceMax,
@@ -328,6 +343,7 @@ bool UChatControlModConfig::ApplyTo(UConfigManager* ConfigManager, FChatControlS
 	bChanged |= Read<UConfigPropertyBool>(Main, TEXT("Enabled"), Settings.bEnabled);
 	bChanged |= Read<UConfigPropertyString>(Main, TEXT("TwitchChannel"), Settings.TwitchChannel);
 	bChanged |= Read<UConfigPropertyString>(Main, TEXT("Language"), Settings.Language);
+	bChanged |= Read<UConfigPropertyInteger>(Main, TEXT("Difficulty"), Settings.Difficulty);
 
 	const UConfigPropertySection* Economy = GetSection(Root, TEXT("Economy"));
 	bChanged |= Read<UConfigPropertyInteger>(Economy, TEXT("ChipsPerInterval"), Settings.ChipsPerInterval);
@@ -355,6 +371,7 @@ bool UChatControlModConfig::ApplyTo(UConfigManager* ConfigManager, FChatControlS
 		bChanged = true;
 	}
 	bChanged |= Read<UConfigPropertyFloat>(Advanced, TEXT("MaxCostMultiplier"), Settings.MaxCostMultiplier);
+	bChanged |= Read<UConfigPropertyFloat>(Advanced, TEXT("SafeZoneRadius"), Settings.SafeZoneRadius);
 	bChanged |= Read<UConfigPropertyFloat>(Advanced, TEXT("SpawnDistanceMin"), Settings.SpawnDistanceMin);
 	bChanged |= Read<UConfigPropertyFloat>(Advanced, TEXT("SpawnDistanceMax"), Settings.SpawnDistanceMax);
 	bChanged |= ReadSeconds(Advanced, TEXT("LifeSpan"), Settings.CreatureLifeSpanSeconds, 1.f, 10.f);

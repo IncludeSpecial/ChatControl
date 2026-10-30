@@ -53,6 +53,14 @@ public:
 	UWorld* GetGameWorld() const;
 	const FChatControlSettings& GetSettings() const { return Settings; }
 
+	/** Remembers an actor spawned by chat, so !panic can remove it */
+	void TrackSpawned(AActor* Actor) { SpawnedActors.Add(Actor); }
+	bool GetHubLocation(FVector& OutLocation) const;
+	/** True while the player is close to the HUB and creature effects should wait */
+	bool IsInSafeZone() const;
+	/** Cancels everything chat started: queue, delayed spawns, timed effects, creatures */
+	void Panic();
+
 private:
 	struct FPendingChaos
 	{
@@ -107,12 +115,14 @@ private:
 	TArray<TPair<double, int32>> ChaosHistory;
 	TMap<FString, FTimedEffect> TimedEffects;
 	TArray<TPair<double, TFunction<void()>>> DelayedActions;
+	TArray<TWeakObjectPtr<AActor>> SpawnedActors;
 
 	TMap<FString, double> GlobalCooldownUntil;
 	/** Key: viewerKey|effectId */
 	TMap<FString, double> ViewerCooldownUntil;
 
 	double NextChipsPayout = 0.0;
+	double NextChaosAttempt = 0.0;
 	double NextEconomySave = 0.0;
 	double LastTriggerTime = 0.0;
 	double LastDeathTime = -1000.0;

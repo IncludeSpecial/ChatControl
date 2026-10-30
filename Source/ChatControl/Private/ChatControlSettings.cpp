@@ -32,6 +32,14 @@ void FChatControlSettings::AddMissingEffectDefaults()
 		{ TEXT("jump"),     MakeEffect(30,  30.f,  60.f,  20.f, 1, 2.5f) },
 		{ TEXT("moon"),     MakeEffect(50,  45.f,  60.f,  30.f, 1, 0.25f) },
 		{ TEXT("heavy"),    MakeEffect(60,  45.f,  60.f,  20.f, 2, 3.f) },
+		{ TEXT("speed"),    MakeEffect(40,  30.f,  60.f,  20.f, 1, 2.f) },
+		{ TEXT("slow"),     MakeEffect(50,  45.f,  60.f,  20.f, 2, 0.5f) },
+		{ TEXT("fov"),      MakeEffect(40,  30.f,  60.f,  30.f, 1, 1.6f) },
+		// Strength = distance in meters
+		{ TEXT("teleport"), MakeEffect(100, 60.f,  180.f, 0.f,  2, 80.f) },
+		{ TEXT("hub"),      MakeEffect(150, 120.f, 300.f, 0.f,  2) },
+		// Factory: Amount = machines
+		{ TEXT("strike"),   MakeEffect(120, 120.f, 180.f, 60.f, 3, 0.f, 5) },
 		// Creatures
 		{ TEXT("ambush"),   MakeEffect(80,  60.f,  120.f, 0.f,  2, 0.f, 3, 3.f, 5.f) },
 		{ TEXT("boss"),     MakeEffect(300, 180.f, 300.f, 0.f,  4, 0.f, 1, 3.f, 5.f) },

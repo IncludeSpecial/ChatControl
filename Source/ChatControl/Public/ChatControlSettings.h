@@ -49,7 +49,12 @@ struct FChatControlSettings
 	/** Chat logins to ignore (bots) */
 	UPROPERTY() TArray<FString> IgnoredUsers = { TEXT("nightbot"), TEXT("streamelements"), TEXT("streamlabs"), TEXT("moobot"), TEXT("fossabot") };
 
+	/** 1 = easy (pricier, fewer creatures), 2 = normal, 3 = hardcore (cheaper, more creatures) */
+	UPROPERTY() int32 Difficulty = 2;
+
 	// --- Creatures ---
+	/** No creatures while the player is within this many meters of the HUB. 0 = off */
+	UPROPERTY() float SafeZoneRadius = 40.f;
 	/** Spawned creatures despawn after this long, so chat can't flood the world with enemies */
 	UPROPERTY() float CreatureLifeSpanSeconds = 300.f;
 	/** Creatures appear on a ring around the player, in meters */
@@ -95,6 +100,9 @@ struct FChatControlSettings
 	void AddMissingEffectDefaults();
 
 	static constexpr int32 CurrentVersion = 2;
+
+	float GetPriceMultiplier() const { return Difficulty <= 1 ? 1.5f : Difficulty >= 3 ? 0.6f : 1.f; }
+	float GetCreatureMultiplier() const { return Difficulty <= 1 ? 0.5f : Difficulty >= 3 ? 2.f : 1.f; }
 
 	static FString GetSettingsPath();
 	static FChatControlSettings LoadOrCreate();
