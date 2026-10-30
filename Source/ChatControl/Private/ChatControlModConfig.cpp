@@ -34,7 +34,8 @@ namespace
 
 	/**
 	 * The section widget defaults to a horizontal list without a header, so every section is made vertical.
-	 * HeaderText stays empty: the widget shows "{HeaderText} ({DisplayName})" and falls back to DisplayName alone.
+	 * The widget shows "{HeaderText} ({DisplayName})", and HeaderText alone when DisplayName is empty
+	 * (an empty HeaderText hides the title), so the name goes into HeaderText only.
 	 */
 	UConfigPropertySection* NewSection(UObject* Outer, const FText& Name, bool bHasHeader, bool bCollapsed = false, const FText& Tooltip = FText::GetEmpty())
 	{
@@ -43,6 +44,8 @@ namespace
 		{
 			Widget->WidgetType = ECP_SectionWidgetType::CPS_Vertical;
 			Widget->HasHeader = bHasHeader;
+			Widget->HeaderText = Name;
+			Widget->DisplayName = FText::GetEmpty();
 			Widget->Collapsed = bCollapsed;
 		}
 		return Section;
