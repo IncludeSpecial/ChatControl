@@ -6,6 +6,7 @@
 #include "FGInventoryComponent.h"
 #include "Resources/FGItemDescriptor.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "Creature/FGCreature.h"
 #include "Buildables/FGBuildableManufacturer.h"
 #include "Buildables/FGBuildableGenerator.h"
@@ -58,11 +59,12 @@ namespace
 	 * Finds ground on a ring around the player at roughly the player's height and in line of sight,
 	 * so creatures don't end up on tree tops, roofs or behind walls.
 	 */
-	bool FindSpawnPoint(UWorld* World, const AActor* Player, const FChatControlSettings& Settings, FVector& OutLocation)
+	bool FindSpawnPoint(UWorld* World, const AActor* Player, const FChatControlSettings& Settings, float Radius, float HalfHeight, FVector& OutLocation)
 	{
 		const FVector Center = Player->GetActorLocation();
 		FCollisionQueryParams Params(TEXT("ChatControlSpawn"), false, Player);
-		for (int32 Attempt = 0; Attempt < 16; ++Attempt)
+		const FCollisionShape Capsule = FCollisionShape::MakeCapsule(Radius, HalfHeight);
+		for (int32 Attempt = 0; Attempt < 40; ++Attempt)
 		{
 			const float Angle = FMath::FRandRange(0.f, 2.f * PI);
 			// Start close and widen the ring if nothing fits
@@ -71,18 +73,25 @@ namespace
 			const float Distance = FMath::FRandRange(MinDistance, MaxDistance) + Attempt * 50.f;
 			const FVector Probe = Center + FVector(FMath::Cos(Angle), FMath::Sin(Angle), 0.f) * Distance;
 
-			// The spot must be visible from the player at chest height
+			// Prefer spots visible from the player; among buildings that is often impossible, so drop it later
 			FHitResult Blocked;
-			if (World->LineTraceSingleByChannel(Blocked, Center, Probe, ECC_Visibility, Params))
+			if (Attempt < 20 && World->LineTraceSingleByChannel(Blocked, Center, Probe, ECC_Visibility, Params))
 			{
 				continue;
 			}
 			FHitResult Ground;
-			if (World->LineTraceSingleByChannel(Ground, Probe, Probe - FVector(0, 0, 800.f), ECC_Visibility, Params))
+			if (!World->LineTraceSingleByChannel(Ground, Probe + FVector(0, 0, 300.f), Probe - FVector(0, 0, 1000.f), ECC_Visibility, Params))
 			{
-				OutLocation = Ground.ImpactPoint + FVector(0, 0, 120.f);
-				return true;
+				continue;
 			}
+			// Big creatures (alphas) need the whole capsule to fit, not just a point
+			const FVector Location = Ground.ImpactPoint + FVector(0, 0, HalfHeight + 30.f);
+			if (World->OverlapAnyTestByChannel(Location, FQuat::Identity, ECC_Pawn, Capsule, Params))
+			{
+				continue;
+			}
+			OutLocation = Location;
+			return true;
 		}
 		return false;
 	}
@@ -93,10 +102,22 @@ namespace
 		int32 Spawned = 0;
 		for (int32 i = 0; i < Count; ++i)
 		{
-			UClass* CreatureClass = LoadClass<APawn>(nullptr, Pool[FMath::RandRange(0, N - 1)]);
-			FVector Location;
-			if (!CreatureClass || !FindSpawnPoint(World, Player, Settings, Location))
+			const TCHAR* ClassPath = Pool[FMath::RandRange(0, N - 1)];
+			UClass* CreatureClass = LoadClass<APawn>(nullptr, ClassPath);
+			if (!CreatureClass)
 			{
+				UE_LOG(LogChatControl, Warning, TEXT("Creature class failed to load: %s"), ClassPath);
+				continue;
+			}
+			float Radius = 60.f, HalfHeight = 90.f;
+			if (const ACharacter* Default = Cast<ACharacter>(CreatureClass->GetDefaultObject()); Default && Default->GetCapsuleComponent())
+			{
+				Default->GetCapsuleComponent()->GetScaledCapsuleSize(Radius, HalfHeight);
+			}
+			FVector Location;
+			if (!FindSpawnPoint(World, Player, Settings, Radius, HalfHeight, Location))
+			{
+				UE_LOG(LogChatControl, Warning, TEXT("No free spot for %s (radius %.0f) near the player"), *CreatureClass->GetName(), Radius);
 				continue;
 			}
 			// Face the player so they notice them and aggro quickly
@@ -129,11 +150,35 @@ namespace
 				FGCreature ? FGCreature->GetIsEnabled() : -1, *GetNameSafe(Creature->GetController()));
 			++Spawned;
 		}
-		if (Spawned == 0)
-		{
-			UE_LOG(LogChatControl, Warning, TEXT("No creatures spawned (no ground found or classes failed to load)"));
-		}
 		return Spawned;
+	}
+
+	/** Spawns what fits; whatever did not fit is retried a few seconds later (the player may move out of a tight spot) */
+	template <int32 N>
+	void SpawnWithRetry(UChatControlSubsystem* Subsystem, const TCHAR* (&Pool)[N], int32 Count, const FString& Viewer, const FText& Arrival, int32 TriesLeft)
+	{
+		UWorld* World = Subsystem->GetGameWorld();
+		const AFGCharacterPlayer* Player = Subsystem->FindPlayer();
+		const int32 Spawned = World && Player ? SpawnCreatures(Subsystem, World, Player, Subsystem->GetSettings(), Pool, Count, Viewer) : 0;
+		if (Spawned > 0)
+		{
+			Subsystem->Announce(FText::Format(Arrival, FText::AsNumber(Spawned), FText::FromString(Viewer)));
+		}
+		const int32 Missing = Count - Spawned;
+		if (Missing <= 0)
+		{
+			return;
+		}
+		if (TriesLeft <= 0)
+		{
+			Subsystem->Announce(FText::Format(Tr(TEXT("No room for creatures from {0} here - they gave up."), TEXT("Существам от {0} здесь не нашлось места - они ушли.")), FText::FromString(Viewer)));
+			return;
+		}
+		UE_LOG(LogChatControl, Log, TEXT("%d creature(s) did not fit, retrying in 3 s"), Missing);
+		Subsystem->RunDelayed(3.f, [Subsystem, &Pool, Missing, Viewer, Arrival, TriesLeft]
+		{
+			SpawnWithRetry(Subsystem, Pool, Missing, Viewer, Arrival, TriesLeft - 1);
+		});
 	}
 
 	/**
@@ -155,17 +200,7 @@ namespace
 
 		auto Spawn = [Subsystem, &Pool, Count, Viewer, Arrival]
 		{
-			UWorld* World = Subsystem->GetGameWorld();
-			const AFGCharacterPlayer* Player = Subsystem->FindPlayer();
-			if (!World || !Player)
-			{
-				return;
-			}
-			const int32 Spawned = SpawnCreatures(Subsystem, World, Player, Subsystem->GetSettings(), Pool, Count, Viewer);
-			if (Spawned > 0)
-			{
-				Subsystem->Announce(FText::Format(Arrival, FText::AsNumber(Spawned), FText::FromString(Viewer)));
-			}
+			SpawnWithRetry(Subsystem, Pool, Count, Viewer, Arrival, 3);
 		};
 
 		if (Delay < 0.1f)
