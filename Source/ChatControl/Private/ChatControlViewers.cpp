@@ -69,8 +69,11 @@ void UChatControlSubsystem::WelcomeViewer(const FString& ViewerName)
 	Greeting->SetRootComponent(Root);
 	Root->RegisterComponent();
 	Greeting->SetActorLocation(Location);
-	AttachNameTag(Greeting, GetTagText(ViewerName), GetNameColor(ViewerName, WelcomeColor), 0.f);
-	AttachNameTag(Greeting, Tr(TEXT("o7 joined the stream"), TEXT("o7 заходит на стрим")).ToString(), WelcomeColor, -45.f);
+	// Tags are centered on their height; a line is about 55 cm, and the name may carry a rank on a second line
+	const FString NameText = GetTagText(ViewerName);
+	const float NameHeight = NameText.Contains(TEXT("<br>")) ? 60.f : 30.f;
+	AttachNameTag(Greeting, NameText, GetNameColor(ViewerName, WelcomeColor), NameHeight);
+	AttachNameTag(Greeting, Tr(TEXT("o7 joined the stream"), TEXT("o7 заходит на стрим")).ToString(), WelcomeColor, -40.f);
 	Greeting->SetLifeSpan(FMath::Max(2.f, Settings.WelcomeSeconds));
 	TrackSpawned(Greeting);
 }

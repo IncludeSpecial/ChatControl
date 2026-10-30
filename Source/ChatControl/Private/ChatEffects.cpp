@@ -669,7 +669,7 @@ TMap<FString, FChatEffect> ChatEffects::CreateAll()
 		Sign->SetRootComponent(Root);
 		Root->RegisterComponent();
 		Sign->SetActorLocation(Location);
-		Ctx.Subsystem->AttachNameTag(Sign, Ctx.ViewerName, Ctx.Subsystem->GetNameColor(Ctx.ViewerName, FColor(250, 149, 73)), 220.f);
+		Ctx.Subsystem->AttachNameTag(Sign, Ctx.ViewerName, Ctx.Subsystem->GetNameColor(Ctx.ViewerName, FColor(250, 149, 73)), 240.f);
 		Ctx.Subsystem->AttachNameTag(Sign, Message, FColor::White, 170.f);
 		Sign->SetLifeSpan(FMath::Max(10.f, Ctx.Settings->Duration));
 		Ctx.Subsystem->TrackSpawned(Sign);
