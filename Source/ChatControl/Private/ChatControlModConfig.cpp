@@ -32,22 +32,25 @@ namespace
 		return Property;
 	}
 
-	/** The section widget defaults to a horizontal list without a header, which squeezes everything into one row */
-	UConfigPropertySection* NewSection(UObject* Outer, const FText& Name, bool bHasHeader)
+	/**
+	 * The section widget defaults to a horizontal list without a header.
+	 * Groups use a vertical list; each effect is a horizontal row so all its options sit on one line.
+	 */
+	UConfigPropertySection* NewSection(UObject* Outer, const FText& Name, bool bHasHeader, bool bHorizontal = false, const FText& Tooltip = FText::GetEmpty())
 	{
-		UConfigPropertySection* Section = NewProperty<UConfigPropertySection>(Outer, TEXT("BP_ConfigPropertySection"), Name, FText::GetEmpty());
+		UConfigPropertySection* Section = NewProperty<UConfigPropertySection>(Outer, TEXT("BP_ConfigPropertySection"), Name, Tooltip);
 		if (UCP_Section* Widget = Cast<UCP_Section>(Section))
 		{
-			Widget->WidgetType = ECP_SectionWidgetType::CPS_Vertical;
+			Widget->WidgetType = bHorizontal ? ECP_SectionWidgetType::CPS_Horizontal : ECP_SectionWidgetType::CPS_Vertical;
 			Widget->HasHeader = bHasHeader;
 			Widget->HeaderText = Name;
 		}
 		return Section;
 	}
 
-	UConfigPropertySection* AddSection(UConfigPropertySection* Parent, const FString& Key, const FText& Name)
+	UConfigPropertySection* AddSection(UConfigPropertySection* Parent, const FString& Key, const FText& Name, bool bHorizontal = false, const FText& Tooltip = FText::GetEmpty())
 	{
-		UConfigPropertySection* Section = NewSection(Parent, Name, true);
+		UConfigPropertySection* Section = NewSection(Parent, Name, true, bHorizontal, Tooltip);
 		Parent->SectionProperties.Add(Key, Section);
 		return Section;
 	}
@@ -100,23 +103,57 @@ namespace
 		return true;
 	}
 
+	/** Follows a "A/B/C" path of section keys */
+	const UConfigPropertySection* FindPath(const UConfigPropertySection* Root, const FString& Path)
+	{
+		TArray<FString> Keys;
+		Path.ParseIntoArray(Keys, TEXT("/"));
+		const UConfigPropertySection* Section = Root;
+		for (const FString& Key : Keys)
+		{
+			Section = GetSection(Section, Key);
+		}
+		return Section;
+	}
+
+	/** Reads an integer field shown in Scale units (60 = minutes) into a float of seconds */
+	bool ReadSeconds(const UConfigPropertySection* Section, const FString& Key, float& Target, float Scale = 1.f, float Min = 0.f)
+	{
+		int32 Value = FMath::RoundToInt(Target / Scale);
+		if (!Read<UConfigPropertyInteger>(Section, Key, Value))
+		{
+			return false;
+		}
+		Target = FMath::Max(Min, Value * Scale);
+		return true;
+	}
+
 	struct FEffectLabel
 	{
 		const TCHAR* Id;
+		const TCHAR* Category;
 		const TCHAR* English;
 		const TCHAR* Russian;
 	};
 
 	const FEffectLabel EffectLabels[] = {
-		{ TEXT("hi"),      TEXT("!hi - wave"),                   TEXT("!hi - помахать") },
-		{ TEXT("gift"),    TEXT("!gift - basic resources"),      TEXT("!gift - базовые ресурсы") },
-		{ TEXT("biggift"), TEXT("!biggift - advanced parts"),    TEXT("!biggift - продвинутые детали") },
-		{ TEXT("jump"),    TEXT("!jump - super jump"),           TEXT("!jump - супер-прыжок") },
-		{ TEXT("moon"),    TEXT("!moon - moon gravity"),         TEXT("!moon - лунная гравитация") },
-		{ TEXT("heavy"),   TEXT("!heavy - heavy gravity"),       TEXT("!heavy - тяжёлая гравитация") },
-		{ TEXT("ambush"),  TEXT("!ambush - enemy ambush"),       TEXT("!ambush - засада врагов") },
-		{ TEXT("boss"),    TEXT("!boss - alpha monster"),        TEXT("!boss - альфа-монстр") },
+		{ TEXT("hi"),      TEXT("Free"),      TEXT("!hi - wave"),                TEXT("!hi - помахать") },
+		{ TEXT("gift"),    TEXT("Free"),      TEXT("!gift - basic resources"),   TEXT("!gift - базовые ресурсы") },
+		{ TEXT("biggift"), TEXT("Gifts"),     TEXT("!biggift - advanced parts"), TEXT("!biggift - продвинутые детали") },
+		{ TEXT("jump"),    TEXT("Movement"),  TEXT("!jump - super jump"),        TEXT("!jump - супер-прыжок") },
+		{ TEXT("moon"),    TEXT("Movement"),  TEXT("!moon - moon gravity"),      TEXT("!moon - лунная гравитация") },
+		{ TEXT("heavy"),   TEXT("Movement"),  TEXT("!heavy - heavy gravity"),    TEXT("!heavy - тяжёлая гравитация") },
+		{ TEXT("ambush"),  TEXT("Creatures"), TEXT("!ambush - enemy ambush"),    TEXT("!ambush - засада врагов") },
+		{ TEXT("boss"),    TEXT("Creatures"), TEXT("!boss - alpha monster"),     TEXT("!boss - альфа-монстр") },
 	};
+
+	FText CategoryName(const FString& Category)
+	{
+		if (Category == TEXT("Free"))     return Tr(TEXT("Free commands"), TEXT("Бесплатные команды"));
+		if (Category == TEXT("Gifts"))    return Tr(TEXT("Paid gifts"), TEXT("Подарки за чипы"));
+		if (Category == TEXT("Movement")) return Tr(TEXT("Chaos: movement"), TEXT("Хаос: движение"));
+		return Tr(TEXT("Chaos: creatures"), TEXT("Хаос: существа"));
+	}
 }
 
 UChatControlModConfig::UChatControlModConfig()
@@ -142,80 +179,36 @@ void UChatControlModConfig::Register(UConfigManager* ConfigManager, const FChatC
 	UConfigPropertySection* Root = NewSection(CDO, FText::GetEmpty(), false);
 	CDO->RootSection = Root;
 
-	// --- General ---
-	UConfigPropertySection* General = AddSection(Root, TEXT("General"), Tr(TEXT("General"), TEXT("Общее")));
-	AddBool(General, TEXT("Enabled"), Defaults.bEnabled,
-		Tr(TEXT("Enabled"), TEXT("Включено")),
+	// --- Main: what a streamer sets once ---
+	UConfigPropertySection* Main = AddSection(Root, TEXT("Main"), Tr(TEXT("Main"), TEXT("Основное")));
+	AddBool(Main, TEXT("Enabled"), Defaults.bEnabled,
+		Tr(TEXT("Mod enabled"), TEXT("Мод включён")),
 		Tr(TEXT("Turn chat effects on or off"), TEXT("Включить или выключить эффекты от чата")));
-	AddString(General, TEXT("TwitchChannel"), Defaults.TwitchChannel,
+	AddString(Main, TEXT("TwitchChannel"), Defaults.TwitchChannel,
 		Tr(TEXT("Twitch channel"), TEXT("Канал Twitch")),
 		Tr(TEXT("Channel name from the URL, e.g. swittyids"), TEXT("Имя канала из ссылки, например swittyids")));
-	AddString(General, TEXT("Language"), Defaults.Language,
-		Tr(TEXT("Language"), TEXT("Язык")),
-		Tr(TEXT("auto = same as the game, en = English, ru = Russian. The settings page switches after restart."),
-		   TEXT("auto = как в игре, en = английский, ru = русский. Страница настроек переключится после перезапуска.")));
-	AddString(General, TEXT("IgnoredUsers"), FString::Join(Defaults.IgnoredUsers, TEXT(", ")),
-		Tr(TEXT("Ignored users"), TEXT("Игнорируемые пользователи")),
-		Tr(TEXT("Comma-separated chat logins, e.g. bots"), TEXT("Логины через запятую, например боты")));
-	AddInt(General, TEXT("ChaosBudgetPerMinute"), Defaults.ChaosBudgetPerMinute,
-		Tr(TEXT("Chaos budget per minute"), TEXT("Бюджет хаоса в минуту")),
-		Tr(TEXT("How many chaos points harmful effects may use per minute. Extra effects wait in a queue."),
-		   TEXT("Сколько очков хаоса вредные эффекты могут потратить за минуту. Остальные ждут в очереди.")));
-	AddInt(General, TEXT("DeathProtectionSeconds"), FMath::RoundToInt(Defaults.DeathProtectionSeconds),
-		Tr(TEXT("Death protection (s)"), TEXT("Защита после смерти (с)")),
-		Tr(TEXT("No harmful effects for this long after you die"), TEXT("Сколько секунд после смерти вредные эффекты не срабатывают")));
+	AddString(Main, TEXT("Language"), Defaults.Language,
+		Tr(TEXT("Language (auto / en / ru)"), TEXT("Язык (auto / en / ru)")),
+		Tr(TEXT("auto = same as the game. The settings page switches after restart."),
+		   TEXT("auto = как в игре. Страница настроек переключится после перезапуска.")));
 
-	// --- Auto-Chaos ---
-	UConfigPropertySection* AutoChaos = AddSection(Root, TEXT("AutoChaos"), Tr(TEXT("Auto-Chaos"), TEXT("Автохаос")));
-	AddBool(AutoChaos, TEXT("Enabled"), Defaults.bAutoChaos,
-		Tr(TEXT("Enabled"), TEXT("Включено")),
-		Tr(TEXT("ADA triggers a random effect when chat is quiet. Works even without viewers."),
-		   TEXT("ADA запускает случайный эффект, когда чат молчит. Работает даже без зрителей.")));
-	AddInt(AutoChaos, TEXT("IdleMinutes"), FMath::RoundToInt(Defaults.AutoChaosIdleSeconds / 60.f),
-		Tr(TEXT("Quiet time (min)"), TEXT("Время тишины (мин)")),
-		Tr(TEXT("Minutes without effects before ADA steps in"), TEXT("Сколько минут без эффектов до вмешательства ADA")));
-
-	// --- Creatures ---
-	UConfigPropertySection* Creatures = AddSection(Root, TEXT("Creatures"), Tr(TEXT("Creatures"), TEXT("Существа")));
-	AddFloat(Creatures, TEXT("SpawnDistanceMin"), Defaults.SpawnDistanceMin,
-		Tr(TEXT("Min spawn distance (m)"), TEXT("Мин. расстояние спавна (м)")));
-	AddFloat(Creatures, TEXT("SpawnDistanceMax"), Defaults.SpawnDistanceMax,
-		Tr(TEXT("Max spawn distance (m)"), TEXT("Макс. расстояние спавна (м)")));
-	AddInt(Creatures, TEXT("LifeSpan"), FMath::RoundToInt(Defaults.CreatureLifeSpanSeconds),
-		Tr(TEXT("Despawn after (s)"), TEXT("Исчезают через (с)")),
-		Tr(TEXT("Creatures from chat disappear after this time"), TEXT("Существа от чата исчезают через это время")));
-
-	// --- Raids ---
-	UConfigPropertySection* Raids = AddSection(Root, TEXT("Raids"), Tr(TEXT("Raids"), TEXT("Рейды")));
-	AddInt(Raids, TEXT("ViewersPerAmbush"), Defaults.RaidViewersPerAmbush,
-		Tr(TEXT("Raiders per ambush"), TEXT("Зрителей рейда на 1 засаду")));
-	AddInt(Raids, TEXT("MaxAmbushes"), Defaults.RaidMaxAmbushes,
-		Tr(TEXT("Max ambushes"), TEXT("Макс. засад")));
-	AddInt(Raids, TEXT("BossMinViewers"), Defaults.RaidBossMinViewers,
-		Tr(TEXT("Boss from raid size"), TEXT("Босс от размера рейда")),
-		Tr(TEXT("0 = never"), TEXT("0 = никогда")));
-
-	// --- Economy ---
+	// --- Chips ---
 	UConfigPropertySection* Economy = AddSection(Root, TEXT("Economy"), Tr(TEXT("FICSIT Chips"), TEXT("Чипы FICSIT")));
 	AddInt(Economy, TEXT("ChipsPerInterval"), Defaults.ChipsPerInterval,
 		Tr(TEXT("Chips for activity"), TEXT("Чипы за активность")),
-		Tr(TEXT("Given to every active viewer each payout"), TEXT("Сколько получает каждый активный зритель при начислении")));
+		Tr(TEXT("Given to every viewer who chatted recently, each payout"), TEXT("Каждому, кто недавно писал в чат, при каждом начислении")));
 	AddInt(Economy, TEXT("IntervalMinutes"), FMath::RoundToInt(Defaults.ChipsIntervalSeconds / 60.f),
-		Tr(TEXT("Payout interval (min)"), TEXT("Интервал начисления (мин)")));
+		Tr(TEXT("Payout every (min)"), TEXT("Начислять каждые (мин)")));
 	AddInt(Economy, TEXT("FirstMessageBonus"), Defaults.FirstMessageBonus,
 		Tr(TEXT("First message bonus"), TEXT("Бонус за первое сообщение")));
 	AddInt(Economy, TEXT("ChipsPerBit"), Defaults.ChipsPerBit,
 		Tr(TEXT("Chips per bit"), TEXT("Чипов за 1 бит")));
 	AddInt(Economy, TEXT("ChipsPerSub"), Defaults.ChipsPerSub,
 		Tr(TEXT("Chips per sub"), TEXT("Чипов за подписку")));
-	AddInt(Economy, TEXT("CostScalePercent"), FMath::RoundToInt(Defaults.CostScalePerViewer * 100.f),
-		Tr(TEXT("Price growth per viewer (%)"), TEXT("Рост цен за зрителя (%)")),
-		Tr(TEXT("Prices grow by this percent for each active viewer above one"), TEXT("На сколько процентов растут цены за каждого активного зрителя сверх одного")));
-	AddFloat(Economy, TEXT("MaxCostMultiplier"), Defaults.MaxCostMultiplier,
-		Tr(TEXT("Max price multiplier"), TEXT("Макс. множитель цен")));
 
-	// --- Effects ---
+	// --- Effects: one row per effect, grouped by kind ---
 	UConfigPropertySection* Effects = AddSection(Root, TEXT("Effects"), Tr(TEXT("Effects"), TEXT("Эффекты")));
+	TMap<FString, UConfigPropertySection*> Categories;
 	for (const FEffectLabel& Label : EffectLabels)
 	{
 		const FChatEffectSettings* Effect = Defaults.Effects.Find(Label.Id);
@@ -223,46 +216,100 @@ void UChatControlModConfig::Register(UConfigManager* ConfigManager, const FChatC
 		{
 			continue;
 		}
-		UConfigPropertySection* Section = AddSection(Effects, Label.Id, Tr(Label.English, Label.Russian));
-		AddBool(Section, TEXT("Enabled"), Effect->bEnabled, Tr(TEXT("Enabled"), TEXT("Включено")));
-		AddInt(Section, TEXT("Cost"), Effect->Cost,
-			Tr(TEXT("Price (chips)"), TEXT("Цена (чипы)")),
-			Tr(TEXT("0 = free"), TEXT("0 = бесплатно")));
-		AddInt(Section, TEXT("ViewerCooldown"), FMath::RoundToInt(Effect->ViewerCooldown),
-			Tr(TEXT("Cooldown per viewer (s)"), TEXT("Кулдаун на зрителя (с)")));
+		UConfigPropertySection*& Category = Categories.FindOrAdd(Label.Category);
+		if (!Category)
+		{
+			Category = AddSection(Effects, Label.Category, CategoryName(Label.Category));
+		}
+		UConfigPropertySection* Row = AddSection(Category, Label.Id, Tr(Label.English, Label.Russian), true);
+		AddBool(Row, TEXT("Enabled"), Effect->bEnabled, Tr(TEXT("On"), TEXT("Вкл.")));
+		AddInt(Row, TEXT("Cost"), Effect->Cost,
+			Tr(TEXT("Price"), TEXT("Цена")),
+			Tr(TEXT("In chips, 0 = free. Grows with the number of active viewers."), TEXT("В чипах, 0 = бесплатно. Растёт с числом активных зрителей.")));
+		AddInt(Row, TEXT("ViewerCooldown"), FMath::RoundToInt(Effect->ViewerCooldown),
+			Tr(TEXT("Cooldown (s)"), TEXT("Кулдаун (с)")),
+			Tr(TEXT("How often one viewer can use it"), TEXT("Как часто один зритель может это запускать")));
 		if (Effect->Duration > 0.f)
 		{
-			AddInt(Section, TEXT("Duration"), FMath::RoundToInt(Effect->Duration),
-				Tr(TEXT("Duration (s)"), TEXT("Длительность (с)")));
-		}
-		if (Effect->Amount > 0)
-		{
-			AddInt(Section, TEXT("Amount"), Effect->Amount,
-				Tr(TEXT("Creatures"), TEXT("Количество существ")));
+			AddInt(Row, TEXT("Duration"), FMath::RoundToInt(Effect->Duration), Tr(TEXT("Duration (s)"), TEXT("Длительность (с)")));
 		}
 		if (Effect->Strength > 0.f)
 		{
-			AddFloat(Section, TEXT("Strength"), Effect->Strength,
+			AddFloat(Row, TEXT("Strength"), Effect->Strength,
 				Tr(TEXT("Strength"), TEXT("Сила")),
 				Tr(TEXT("Jump/gravity multiplier, or share of a stack for gifts (0.5 = half)"),
 				   TEXT("Множитель прыжка/гравитации или доля стака для подарков (0.5 = половина)")));
 		}
+		if (Effect->Amount > 0)
+		{
+			AddInt(Row, TEXT("Amount"), Effect->Amount, Tr(TEXT("Count"), TEXT("Количество")));
+		}
 		if (Effect->DelayMax > 0.f || Effect->Amount > 0)
 		{
-			AddFloat(Section, TEXT("DelayMin"), Effect->DelayMin,
-				Tr(TEXT("Warning delay min (s)"), TEXT("Задержка мин. (с)")),
+			AddFloat(Row, TEXT("DelayMin"), Effect->DelayMin,
+				Tr(TEXT("Delay from (s)"), TEXT("Задержка от (с)")),
 				Tr(TEXT("Time between the warning and the spawn"), TEXT("Время между предупреждением и появлением")));
-			AddFloat(Section, TEXT("DelayMax"), Effect->DelayMax,
-				Tr(TEXT("Warning delay max (s)"), TEXT("Задержка макс. (с)")));
+			AddFloat(Row, TEXT("DelayMax"), Effect->DelayMax, Tr(TEXT("to (s)"), TEXT("до (с)")));
 		}
-		AddInt(Section, TEXT("GlobalCooldown"), FMath::RoundToInt(Effect->GlobalCooldown),
-			Tr(TEXT("Global cooldown (s)"), TEXT("Общий кулдаун (с)")));
-		if (Effect->ChaosWeight > 0)
+	}
+
+	// --- Auto-Chaos ---
+	UConfigPropertySection* AutoChaos = AddSection(Root, TEXT("AutoChaos"), Tr(TEXT("Auto-Chaos"), TEXT("Автохаос")));
+	AddBool(AutoChaos, TEXT("Enabled"), Defaults.bAutoChaos,
+		Tr(TEXT("Enabled"), TEXT("Включён")),
+		Tr(TEXT("ADA triggers a random paid effect when chat is quiet. Works even without viewers."),
+		   TEXT("ADA запускает случайный платный эффект, когда чат молчит. Работает даже без зрителей.")));
+	AddInt(AutoChaos, TEXT("IdleMinutes"), FMath::RoundToInt(Defaults.AutoChaosIdleSeconds / 60.f),
+		Tr(TEXT("After quiet time (min)"), TEXT("После тишины (мин)")));
+
+	// --- Raids ---
+	UConfigPropertySection* Raids = AddSection(Root, TEXT("Raids"), Tr(TEXT("Raids"), TEXT("Рейды")));
+	AddInt(Raids, TEXT("ViewersPerAmbush"), Defaults.RaidViewersPerAmbush,
+		Tr(TEXT("1 ambush per N raiders"), TEXT("1 засада на N зрителей рейда")));
+	AddInt(Raids, TEXT("MaxAmbushes"), Defaults.RaidMaxAmbushes,
+		Tr(TEXT("Max ambushes"), TEXT("Макс. засад")));
+	AddInt(Raids, TEXT("BossMinViewers"), Defaults.RaidBossMinViewers,
+		Tr(TEXT("Boss from N raiders"), TEXT("Босс от N зрителей рейда")),
+		Tr(TEXT("0 = never"), TEXT("0 = никогда")));
+
+	// --- Advanced: limits and fine tuning ---
+	UConfigPropertySection* Advanced = AddSection(Root, TEXT("Advanced"), Tr(TEXT("Advanced"), TEXT("Дополнительно")));
+	AddInt(Advanced, TEXT("ChaosBudgetPerMinute"), Defaults.ChaosBudgetPerMinute,
+		Tr(TEXT("Chaos budget per minute"), TEXT("Бюджет хаоса в минуту")),
+		Tr(TEXT("Chaos points harmful effects may use per minute. Extra effects wait in a queue."),
+		   TEXT("Сколько очков хаоса вредные эффекты тратят за минуту. Остальные ждут в очереди.")));
+	AddInt(Advanced, TEXT("DeathProtectionSeconds"), FMath::RoundToInt(Defaults.DeathProtectionSeconds),
+		Tr(TEXT("Death protection (s)"), TEXT("Защита после смерти (с)")),
+		Tr(TEXT("No harmful effects for this long after you die"), TEXT("Столько секунд после смерти вредные эффекты не срабатывают")));
+	AddInt(Advanced, TEXT("CostScalePercent"), FMath::RoundToInt(Defaults.CostScalePerViewer * 100.f),
+		Tr(TEXT("Price growth per viewer (%)"), TEXT("Рост цен за зрителя (%)")));
+	AddFloat(Advanced, TEXT("MaxCostMultiplier"), Defaults.MaxCostMultiplier,
+		Tr(TEXT("Max price multiplier"), TEXT("Макс. множитель цен")));
+	AddFloat(Advanced, TEXT("SpawnDistanceMin"), Defaults.SpawnDistanceMin,
+		Tr(TEXT("Creatures spawn from (m)"), TEXT("Существа появляются от (м)")));
+	AddFloat(Advanced, TEXT("SpawnDistanceMax"), Defaults.SpawnDistanceMax,
+		Tr(TEXT("to (m)"), TEXT("до (м)")));
+	AddInt(Advanced, TEXT("LifeSpan"), FMath::RoundToInt(Defaults.CreatureLifeSpanSeconds),
+		Tr(TEXT("Creatures despawn after (s)"), TEXT("Существа исчезают через (с)")));
+	AddString(Advanced, TEXT("IgnoredUsers"), FString::Join(Defaults.IgnoredUsers, TEXT(", ")),
+		Tr(TEXT("Ignored users"), TEXT("Игнорируемые пользователи")),
+		Tr(TEXT("Comma-separated chat logins, e.g. bots"), TEXT("Логины через запятую, например боты")));
+
+	UConfigPropertySection* Limits = AddSection(Advanced, TEXT("EffectLimits"), Tr(TEXT("Effect limits"), TEXT("Ограничения эффектов")));
+	for (const FEffectLabel& Label : EffectLabels)
+	{
+		const FChatEffectSettings* Effect = Defaults.Effects.Find(Label.Id);
+		if (!Effect)
 		{
-			AddInt(Section, TEXT("ChaosWeight"), Effect->ChaosWeight,
-				Tr(TEXT("Chaos points"), TEXT("Очки хаоса")),
-				Tr(TEXT("How much of the per-minute chaos budget it uses"), TEXT("Сколько бюджета хаоса в минуту тратит")));
+			continue;
 		}
+		UConfigPropertySection* Row = AddSection(Limits, Label.Id, Tr(Label.English, Label.Russian), true);
+		AddInt(Row, TEXT("GlobalCooldown"), FMath::RoundToInt(Effect->GlobalCooldown),
+			Tr(TEXT("Global cooldown (s)"), TEXT("Общий кулдаун (с)")),
+			Tr(TEXT("How often anyone can use it"), TEXT("Как часто это может запустить кто угодно")));
+		AddInt(Row, TEXT("ChaosWeight"), Effect->ChaosWeight,
+			Tr(TEXT("Chaos points"), TEXT("Очки хаоса")),
+			Tr(TEXT("Share of the chaos budget it uses"), TEXT("Сколько бюджета хаоса тратит")));
 	}
 
 	ConfigManager->RegisterModConfiguration(StaticClass());
@@ -277,13 +324,42 @@ bool UChatControlModConfig::ApplyTo(UConfigManager* ConfigManager, FChatControlS
 	}
 	bool bChanged = false;
 
-	const UConfigPropertySection* General = GetSection(Root, TEXT("General"));
-	bChanged |= Read<UConfigPropertyBool>(General, TEXT("Enabled"), Settings.bEnabled);
-	bChanged |= Read<UConfigPropertyString>(General, TEXT("TwitchChannel"), Settings.TwitchChannel);
-	bChanged |= Read<UConfigPropertyInteger>(General, TEXT("ChaosBudgetPerMinute"), Settings.ChaosBudgetPerMinute);
-	bChanged |= Read<UConfigPropertyString>(General, TEXT("Language"), Settings.Language);
+	const UConfigPropertySection* Main = GetSection(Root, TEXT("Main"));
+	bChanged |= Read<UConfigPropertyBool>(Main, TEXT("Enabled"), Settings.bEnabled);
+	bChanged |= Read<UConfigPropertyString>(Main, TEXT("TwitchChannel"), Settings.TwitchChannel);
+	bChanged |= Read<UConfigPropertyString>(Main, TEXT("Language"), Settings.Language);
+
+	const UConfigPropertySection* Economy = GetSection(Root, TEXT("Economy"));
+	bChanged |= Read<UConfigPropertyInteger>(Economy, TEXT("ChipsPerInterval"), Settings.ChipsPerInterval);
+	bChanged |= ReadSeconds(Economy, TEXT("IntervalMinutes"), Settings.ChipsIntervalSeconds, 60.f, 60.f);
+	bChanged |= Read<UConfigPropertyInteger>(Economy, TEXT("FirstMessageBonus"), Settings.FirstMessageBonus);
+	bChanged |= Read<UConfigPropertyInteger>(Economy, TEXT("ChipsPerBit"), Settings.ChipsPerBit);
+	bChanged |= Read<UConfigPropertyInteger>(Economy, TEXT("ChipsPerSub"), Settings.ChipsPerSub);
+
+	const UConfigPropertySection* AutoChaos = GetSection(Root, TEXT("AutoChaos"));
+	bChanged |= Read<UConfigPropertyBool>(AutoChaos, TEXT("Enabled"), Settings.bAutoChaos);
+	bChanged |= ReadSeconds(AutoChaos, TEXT("IdleMinutes"), Settings.AutoChaosIdleSeconds, 60.f, 60.f);
+
+	const UConfigPropertySection* Raids = GetSection(Root, TEXT("Raids"));
+	bChanged |= Read<UConfigPropertyInteger>(Raids, TEXT("ViewersPerAmbush"), Settings.RaidViewersPerAmbush);
+	bChanged |= Read<UConfigPropertyInteger>(Raids, TEXT("MaxAmbushes"), Settings.RaidMaxAmbushes);
+	bChanged |= Read<UConfigPropertyInteger>(Raids, TEXT("BossMinViewers"), Settings.RaidBossMinViewers);
+
+	const UConfigPropertySection* Advanced = GetSection(Root, TEXT("Advanced"));
+	bChanged |= Read<UConfigPropertyInteger>(Advanced, TEXT("ChaosBudgetPerMinute"), Settings.ChaosBudgetPerMinute);
+	bChanged |= ReadSeconds(Advanced, TEXT("DeathProtectionSeconds"), Settings.DeathProtectionSeconds);
+	int32 CostScalePercent = FMath::RoundToInt(Settings.CostScalePerViewer * 100.f);
+	if (Read<UConfigPropertyInteger>(Advanced, TEXT("CostScalePercent"), CostScalePercent))
+	{
+		Settings.CostScalePerViewer = CostScalePercent / 100.f;
+		bChanged = true;
+	}
+	bChanged |= Read<UConfigPropertyFloat>(Advanced, TEXT("MaxCostMultiplier"), Settings.MaxCostMultiplier);
+	bChanged |= Read<UConfigPropertyFloat>(Advanced, TEXT("SpawnDistanceMin"), Settings.SpawnDistanceMin);
+	bChanged |= Read<UConfigPropertyFloat>(Advanced, TEXT("SpawnDistanceMax"), Settings.SpawnDistanceMax);
+	bChanged |= ReadSeconds(Advanced, TEXT("LifeSpan"), Settings.CreatureLifeSpanSeconds, 1.f, 10.f);
 	FString Ignored = FString::Join(Settings.IgnoredUsers, TEXT(", "));
-	if (Read<UConfigPropertyString>(General, TEXT("IgnoredUsers"), Ignored))
+	if (Read<UConfigPropertyString>(Advanced, TEXT("IgnoredUsers"), Ignored))
 	{
 		TArray<FString> Parts;
 		Ignored.ParseIntoArray(Parts, TEXT(","));
@@ -299,88 +375,28 @@ bool UChatControlModConfig::ApplyTo(UConfigManager* ConfigManager, FChatControlS
 		bChanged = true;
 	}
 
-	const UConfigPropertySection* Creatures = GetSection(Root, TEXT("Creatures"));
-	bChanged |= Read<UConfigPropertyFloat>(Creatures, TEXT("SpawnDistanceMin"), Settings.SpawnDistanceMin);
-	bChanged |= Read<UConfigPropertyFloat>(Creatures, TEXT("SpawnDistanceMax"), Settings.SpawnDistanceMax);
-	int32 LifeSpan = FMath::RoundToInt(Settings.CreatureLifeSpanSeconds);
-	if (Read<UConfigPropertyInteger>(Creatures, TEXT("LifeSpan"), LifeSpan))
+	for (const FEffectLabel& Label : EffectLabels)
 	{
-		Settings.CreatureLifeSpanSeconds = LifeSpan;
-		bChanged = true;
-	}
-
-	const UConfigPropertySection* Raids = GetSection(Root, TEXT("Raids"));
-	bChanged |= Read<UConfigPropertyInteger>(Raids, TEXT("ViewersPerAmbush"), Settings.RaidViewersPerAmbush);
-	bChanged |= Read<UConfigPropertyInteger>(Raids, TEXT("MaxAmbushes"), Settings.RaidMaxAmbushes);
-	bChanged |= Read<UConfigPropertyInteger>(Raids, TEXT("BossMinViewers"), Settings.RaidBossMinViewers);
-	int32 DeathProtection = FMath::RoundToInt(Settings.DeathProtectionSeconds);
-	if (Read<UConfigPropertyInteger>(General, TEXT("DeathProtectionSeconds"), DeathProtection))
-	{
-		Settings.DeathProtectionSeconds = DeathProtection;
-		bChanged = true;
-	}
-
-	const UConfigPropertySection* AutoChaos = GetSection(Root, TEXT("AutoChaos"));
-	bChanged |= Read<UConfigPropertyBool>(AutoChaos, TEXT("Enabled"), Settings.bAutoChaos);
-	int32 IdleMinutes = FMath::RoundToInt(Settings.AutoChaosIdleSeconds / 60.f);
-	if (Read<UConfigPropertyInteger>(AutoChaos, TEXT("IdleMinutes"), IdleMinutes))
-	{
-		Settings.AutoChaosIdleSeconds = FMath::Max(1, IdleMinutes) * 60.f;
-		bChanged = true;
-	}
-
-	const UConfigPropertySection* Economy = GetSection(Root, TEXT("Economy"));
-	bChanged |= Read<UConfigPropertyInteger>(Economy, TEXT("ChipsPerInterval"), Settings.ChipsPerInterval);
-	int32 IntervalMinutes = FMath::RoundToInt(Settings.ChipsIntervalSeconds / 60.f);
-	if (Read<UConfigPropertyInteger>(Economy, TEXT("IntervalMinutes"), IntervalMinutes))
-	{
-		Settings.ChipsIntervalSeconds = FMath::Max(1, IntervalMinutes) * 60.f;
-		bChanged = true;
-	}
-	bChanged |= Read<UConfigPropertyInteger>(Economy, TEXT("FirstMessageBonus"), Settings.FirstMessageBonus);
-	bChanged |= Read<UConfigPropertyInteger>(Economy, TEXT("ChipsPerBit"), Settings.ChipsPerBit);
-	bChanged |= Read<UConfigPropertyInteger>(Economy, TEXT("ChipsPerSub"), Settings.ChipsPerSub);
-	int32 CostScalePercent = FMath::RoundToInt(Settings.CostScalePerViewer * 100.f);
-	if (Read<UConfigPropertyInteger>(Economy, TEXT("CostScalePercent"), CostScalePercent))
-	{
-		Settings.CostScalePerViewer = CostScalePercent / 100.f;
-		bChanged = true;
-	}
-	bChanged |= Read<UConfigPropertyFloat>(Economy, TEXT("MaxCostMultiplier"), Settings.MaxCostMultiplier);
-
-	const UConfigPropertySection* Effects = GetSection(Root, TEXT("Effects"));
-	for (auto& Pair : Settings.Effects)
-	{
-		const UConfigPropertySection* Section = GetSection(Effects, Pair.Key);
-		if (!Section)
+		FChatEffectSettings* Effect = Settings.Effects.Find(Label.Id);
+		if (!Effect)
 		{
 			continue;
 		}
-		FChatEffectSettings& Effect = Pair.Value;
-		bChanged |= Read<UConfigPropertyBool>(Section, TEXT("Enabled"), Effect.bEnabled);
-		bChanged |= Read<UConfigPropertyInteger>(Section, TEXT("Cost"), Effect.Cost);
-		int32 Cooldown = FMath::RoundToInt(Effect.ViewerCooldown);
-		if (Read<UConfigPropertyInteger>(Section, TEXT("ViewerCooldown"), Cooldown))
+		if (const UConfigPropertySection* Row = FindPath(Root, FString::Printf(TEXT("Effects/%s/%s"), Label.Category, Label.Id)))
 		{
-			Effect.ViewerCooldown = Cooldown;
-			bChanged = true;
+			bChanged |= Read<UConfigPropertyBool>(Row, TEXT("Enabled"), Effect->bEnabled);
+			bChanged |= Read<UConfigPropertyInteger>(Row, TEXT("Cost"), Effect->Cost);
+			bChanged |= ReadSeconds(Row, TEXT("ViewerCooldown"), Effect->ViewerCooldown);
+			bChanged |= ReadSeconds(Row, TEXT("Duration"), Effect->Duration);
+			bChanged |= Read<UConfigPropertyFloat>(Row, TEXT("Strength"), Effect->Strength);
+			bChanged |= Read<UConfigPropertyInteger>(Row, TEXT("Amount"), Effect->Amount);
+			bChanged |= Read<UConfigPropertyFloat>(Row, TEXT("DelayMin"), Effect->DelayMin);
+			bChanged |= Read<UConfigPropertyFloat>(Row, TEXT("DelayMax"), Effect->DelayMax);
 		}
-		int32 Duration = FMath::RoundToInt(Effect.Duration);
-		if (Read<UConfigPropertyInteger>(Section, TEXT("Duration"), Duration))
+		if (const UConfigPropertySection* Row = FindPath(Root, FString::Printf(TEXT("Advanced/EffectLimits/%s"), Label.Id)))
 		{
-			Effect.Duration = Duration;
-			bChanged = true;
-		}
-		bChanged |= Read<UConfigPropertyInteger>(Section, TEXT("Amount"), Effect.Amount);
-		bChanged |= Read<UConfigPropertyFloat>(Section, TEXT("Strength"), Effect.Strength);
-		bChanged |= Read<UConfigPropertyFloat>(Section, TEXT("DelayMin"), Effect.DelayMin);
-		bChanged |= Read<UConfigPropertyFloat>(Section, TEXT("DelayMax"), Effect.DelayMax);
-		bChanged |= Read<UConfigPropertyInteger>(Section, TEXT("ChaosWeight"), Effect.ChaosWeight);
-		int32 GlobalCooldown = FMath::RoundToInt(Effect.GlobalCooldown);
-		if (Read<UConfigPropertyInteger>(Section, TEXT("GlobalCooldown"), GlobalCooldown))
-		{
-			Effect.GlobalCooldown = GlobalCooldown;
-			bChanged = true;
+			bChanged |= ReadSeconds(Row, TEXT("GlobalCooldown"), Effect->GlobalCooldown);
+			bChanged |= Read<UConfigPropertyInteger>(Row, TEXT("ChaosWeight"), Effect->ChaosWeight);
 		}
 	}
 
