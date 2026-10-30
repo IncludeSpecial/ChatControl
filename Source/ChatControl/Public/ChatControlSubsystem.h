@@ -59,6 +59,10 @@ private:
 		TFunction<void()> Revert;
 	};
 
+	void RestartConnectors();
+	/** Picks up changes made in the in-game mod config menu */
+	void TickConfig(double Now);
+
 	void HandleEvent(const FChatEvent& Event);
 	void HandleCommand(const FChatEvent& Event);
 	/** Validates cooldowns and price, then runs or queues the effect. bFree skips the price (rewards, raids, Auto-Chaos). */
@@ -77,6 +81,10 @@ private:
 
 	FChatControlSettings Settings;
 	FChatEconomy Economy;
+
+	UPROPERTY()
+	TObjectPtr<class UConfigManager> ConfigManager;
+	double NextConfigCheck = 0.0;
 	TMap<FString, FChatEffect> Effects;
 
 	TQueue<FChatEvent, EQueueMode::Mpsc> IncomingEvents;

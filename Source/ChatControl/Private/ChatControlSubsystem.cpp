@@ -1,6 +1,8 @@
 #include "ChatControlSubsystem.h"
 #include "ChatControl.h"
 #include "Twitch/TwitchIrcConnector.h"
+#include "ChatControlModConfig.h"
+#include "Configuration/ConfigManager.h"
 #include "FGChatManager.h"
 #include "FGCharacterPlayer.h"
 #include "EngineUtils.h"
@@ -22,16 +24,24 @@ void UChatControlSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	Economy.Load();
 	Effects = ChatEffects::CreateAll();
 
+	// The in-game settings page overrides the basic options from Settings.json
+	ConfigManager = Collection.InitializeDependency<UConfigManager>();
+	if (ConfigManager)
+	{
+		UChatControlModConfig::Register(ConfigManager, Settings);
+		if (UChatControlModConfig::ApplyTo(ConfigManager, Settings))
+		{
+			Settings.Save();
+		}
+	}
+
 	const double Now = FPlatformTime::Seconds();
 	NextChipsPayout = Now + Settings.ChipsIntervalSeconds;
 	NextEconomySave = Now + 60.0;
+	NextConfigCheck = Now + 1.0;
 	LastTriggerTime = Now;
 
-	if (Settings.bEnabled && !Settings.TwitchChannel.IsEmpty())
-	{
-		Twitch = MakeShared<FTwitchIrcConnector>(Settings.TwitchChannel, IncomingEvents);
-		Twitch->Start();
-	}
+	RestartConnectors();
 
 	bInitialized = true;
 	UE_LOG(LogChatControl, Log, TEXT("ChatControl initialized, settings: %s"), *FChatControlSettings::GetSettingsPath());
@@ -49,6 +59,39 @@ void UChatControlSubsystem::Deinitialize()
 	TimedEffects.Empty();
 	Economy.Save();
 	Super::Deinitialize();
+}
+
+void UChatControlSubsystem::RestartConnectors()
+{
+	// Destroying the connector stops and joins its thread
+	Twitch.Reset();
+	if (Settings.bEnabled && !Settings.TwitchChannel.IsEmpty())
+	{
+		Twitch = MakeShared<FTwitchIrcConnector>(Settings.TwitchChannel, IncomingEvents);
+		Twitch->Start();
+	}
+}
+
+void UChatControlSubsystem::TickConfig(double Now)
+{
+	if (!ConfigManager || Now < NextConfigCheck)
+	{
+		return;
+	}
+	NextConfigCheck = Now + 1.0;
+
+	const FString OldChannel = Settings.TwitchChannel;
+	const bool bWasEnabled = Settings.bEnabled;
+	if (!UChatControlModConfig::ApplyTo(ConfigManager, Settings))
+	{
+		return;
+	}
+	Settings.Save();
+	if (Settings.TwitchChannel != OldChannel || Settings.bEnabled != bWasEnabled)
+	{
+		RestartConnectors();
+	}
+	UE_LOG(LogChatControl, Log, TEXT("Settings changed in the mod config menu"));
 }
 
 TStatId UChatControlSubsystem::GetStatId() const
@@ -71,6 +114,7 @@ void UChatControlSubsystem::Tick(float DeltaTime)
 		LastDeathTime = Now;
 	}
 
+	TickConfig(Now);
 	TickEconomy(Now);
 	TickTimedEffects(Now);
 	TickChaosQueue(Now);
