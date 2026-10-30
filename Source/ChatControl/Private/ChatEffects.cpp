@@ -8,6 +8,11 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Creature/FGCreature.h"
 #include "Buildables/FGBuildableManufacturer.h"
+#include "Buildables/FGBuildableGenerator.h"
+#include "FGItemPickup_Spawnable.h"
+#include "FGCrate.h"
+#include "FGResourceSinkSubsystem.h"
+#include "FGTimeSubsystem.h"
 #include "EngineUtils.h"
 #include "Camera/PlayerCameraManager.h"
 #include "ChatText.h"
@@ -464,6 +469,140 @@ TMap<FString, FChatEffect> ChatEffects::CreateAll()
 		Ctx.Subsystem->Announce(FText::Format(Tr(TEXT("{0} started a strike: {1} machines stop for {2} s!"), TEXT("{0} устраивает забастовку: {1} машин стоят {2} с!")),
 			FText::FromString(Ctx.ViewerName), FText::AsNumber(Count), FText::AsNumber(FMath::RoundToInt(Ctx.Settings->Duration))));
 		return true;
+	});
+
+	Add(TEXT("blackout"), true, [](const FChatEffectContext& Ctx)
+	{
+		// Stopping the generators overloads the grid, so the fuse blows the normal way and has to be reset by hand
+		TArray<TWeakObjectPtr<AFGBuildableGenerator>> Stopped;
+		for (TActorIterator<AFGBuildableGenerator> It(Ctx.World); It; ++It)
+		{
+			if (!It->IsProductionPaused())
+			{
+				It->SetIsProductionPaused(true);
+				Stopped.Add(*It);
+			}
+		}
+		if (Stopped.Num() == 0)
+		{
+			return false;
+		}
+		Ctx.Subsystem->StartTimedEffect(TEXT("blackout"), Ctx.Settings->Duration, [] {},
+			[Stopped]
+			{
+				for (const TWeakObjectPtr<AFGBuildableGenerator>& Generator : Stopped)
+				{
+					if (Generator.IsValid() && Generator->IsProductionPaused())
+					{
+						Generator->SetIsProductionPaused(false);
+					}
+				}
+			});
+		Ctx.Subsystem->Announce(FText::Format(Tr(TEXT("{0} pulled the plug! Generators are down for {1} s - check your fuses!"), TEXT("{0} выдёргивает рубильник! Генераторы стоят {1} с - проверь предохранители!")),
+			FText::FromString(Ctx.ViewerName), FText::AsNumber(FMath::RoundToInt(Ctx.Settings->Duration))));
+		return true;
+	});
+
+	Add(TEXT("underclock"), true, [](const FChatEffectContext& Ctx)
+	{
+		TArray<AFGBuildableManufacturer*> Machines;
+		for (TActorIterator<AFGBuildableManufacturer> It(Ctx.World); It; ++It)
+		{
+			if (It->GetCanChangePotential() && It->GetPendingPotential() > Ctx.Settings->Strength)
+			{
+				Machines.Add(*It);
+			}
+		}
+		if (Machines.Num() == 0)
+		{
+			return false;
+		}
+		const int32 Count = FMath::Min(Machines.Num(), FMath::Max(1, Ctx.Settings->Amount));
+		TArray<TPair<TWeakObjectPtr<AFGBuildableManufacturer>, float>> Changed;
+		for (int32 i = 0; i < Count; ++i)
+		{
+			Machines.Swap(i, FMath::RandRange(i, Machines.Num() - 1));
+			Changed.Add({ Machines[i], Machines[i]->GetPendingPotential() });
+			Machines[i]->SetPendingPotential(FMath::Clamp(Ctx.Settings->Strength, 0.01f, 1.f));
+		}
+		Ctx.Subsystem->StartTimedEffect(TEXT("underclock"), Ctx.Settings->Duration, [] {},
+			[Changed]
+			{
+				for (const auto& Pair : Changed)
+				{
+					if (Pair.Key.IsValid())
+					{
+						Pair.Key->SetPendingPotential(Pair.Value);
+					}
+				}
+			});
+		Ctx.Subsystem->Announce(FText::Format(Tr(TEXT("{0} underclocked {1} machines for {2} s!"), TEXT("{0} замедляет {1} машин на {2} с!")),
+			FText::FromString(Ctx.ViewerName), FText::AsNumber(Count), FText::AsNumber(FMath::RoundToInt(Ctx.Settings->Duration))));
+		return true;
+	});
+
+	Add(TEXT("rain"), false, [](const FChatEffectContext& Ctx)
+	{
+		TArray<FInventoryStack> Items;
+		for (int32 i = 0; i < FMath::Max(1, Ctx.Settings->Amount); ++i)
+		{
+			const bool bAdvanced = FMath::FRand() < 0.3f;
+			const TCHAR* Path = bAdvanced ? AdvancedGiftPool[FMath::RandRange(0, UE_ARRAY_COUNT(AdvancedGiftPool) - 1)] : BasicGiftPool[FMath::RandRange(0, UE_ARRAY_COUNT(BasicGiftPool) - 1)];
+			if (TSubclassOf<UFGItemDescriptor> ItemClass = LoadClass<UFGItemDescriptor>(nullptr, Path))
+			{
+				const int32 Amount = FMath::Max(1, FMath::RoundToInt(UFGItemDescriptor::GetStackSize(ItemClass) * FMath::Clamp(Ctx.Settings->Strength, 0.01f, 1.f)));
+				Items.Add(FInventoryStack(Amount, ItemClass));
+			}
+		}
+		if (Items.Num() == 0)
+		{
+			return false;
+		}
+		const FVector Location = Ctx.Player->GetActorLocation() + Ctx.Player->GetActorForwardVector() * 300.f;
+		AFGCrate* Crate = nullptr;
+		AFGItemPickup_Spawnable::SpawnInventoryCrate(Ctx.World, Items, Location, { Ctx.Player }, Crate, EFGCrateType::CT_DismantleCrate);
+		if (!Crate)
+		{
+			return false;
+		}
+		Ctx.Subsystem->Announce(FText::Format(Tr(TEXT("{0} dropped a supply crate in front of you!"), TEXT("{0} сбрасывает тебе ящик с припасами!")), FText::FromString(Ctx.ViewerName)));
+		return true;
+	});
+
+	Add(TEXT("sink"), false, [](const FChatEffectContext& Ctx)
+	{
+		AFGResourceSinkSubsystem* Sink = AFGResourceSinkSubsystem::Get(Ctx.World);
+		if (!Sink)
+		{
+			return false;
+		}
+		const int32 Coupons = FMath::Max(1, Ctx.Settings->Amount);
+		Sink->AddResourceSinkCoupons(Coupons, false);
+		Ctx.Subsystem->Announce(FText::Format(Tr(TEXT("{0} gave you {1} AWESOME Sink coupons!"), TEXT("{0} дарит тебе {1} купонов AWESOME Sink!")),
+			FText::FromString(Ctx.ViewerName), FText::AsNumber(Coupons)));
+		return true;
+	});
+
+	auto SetTime = [](const FChatEffectContext& Ctx, float Hours, const FText& Message)
+	{
+		AFGTimeOfDaySubsystem* Time = AFGTimeOfDaySubsystem::Get(Ctx.World);
+		if (!Time)
+		{
+			return false;
+		}
+		Time->SetDaySeconds(Hours * 3600.f);
+		Ctx.Subsystem->Announce(Message);
+		return true;
+	};
+
+	Add(TEXT("night"), true, [SetTime](const FChatEffectContext& Ctx)
+	{
+		return SetTime(Ctx, 0.f, FText::Format(Tr(TEXT("{0} turned off the sun!"), TEXT("{0} выключает солнце!")), FText::FromString(Ctx.ViewerName)));
+	});
+
+	Add(TEXT("day"), false, [SetTime](const FChatEffectContext& Ctx)
+	{
+		return SetTime(Ctx, 12.f, FText::Format(Tr(TEXT("{0} brought the sun back!"), TEXT("{0} возвращает солнце!")), FText::FromString(Ctx.ViewerName)));
 	});
 
 	Add(TEXT("ambush"), true, [](const FChatEffectContext& Ctx)

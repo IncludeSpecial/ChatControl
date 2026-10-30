@@ -149,6 +149,12 @@ namespace
 		{ TEXT("teleport"),TEXT("Movement"),  TEXT("!teleport - random teleport (strength = meters)"), TEXT("!teleport - случайный телепорт (сила = метры)") },
 		{ TEXT("hub"),     TEXT("Movement"),  TEXT("!hub - back to the HUB"),    TEXT("!hub - обратно к ХАБу") },
 		{ TEXT("strike"),  TEXT("Factory"),   TEXT("!strike - machines stop"),   TEXT("!strike - забастовка машин") },
+		{ TEXT("underclock"), TEXT("Factory"), TEXT("!underclock - machines slow down (strength = speed)"), TEXT("!underclock - замедление машин (сила = скорость)") },
+		{ TEXT("blackout"), TEXT("Factory"),  TEXT("!blackout - generators down"), TEXT("!blackout - генераторы стоят") },
+		{ TEXT("rain"),    TEXT("Gifts"),     TEXT("!rain - supply crate"),      TEXT("!rain - ящик с припасами") },
+		{ TEXT("sink"),    TEXT("Gifts"),     TEXT("!sink - AWESOME Sink coupons"), TEXT("!sink - купоны AWESOME Sink") },
+		{ TEXT("night"),   TEXT("World"),     TEXT("!night - midnight"),         TEXT("!night - полночь") },
+		{ TEXT("day"),     TEXT("World"),     TEXT("!day - noon"),               TEXT("!day - полдень") },
 		{ TEXT("ambush"),  TEXT("Creatures"), TEXT("!ambush - enemy ambush"),    TEXT("!ambush - засада врагов") },
 		{ TEXT("boss"),    TEXT("Creatures"), TEXT("!boss - alpha monster"),     TEXT("!boss - альфа-монстр") },
 	};
@@ -159,6 +165,7 @@ namespace
 		if (Category == TEXT("Gifts"))    return Tr(TEXT("Paid gifts"), TEXT("Подарки за чипы"));
 		if (Category == TEXT("Movement")) return Tr(TEXT("Chaos: player"), TEXT("Хаос: игрок"));
 		if (Category == TEXT("Factory"))  return Tr(TEXT("Chaos: factory"), TEXT("Хаос: фабрика"));
+		if (Category == TEXT("World"))    return Tr(TEXT("World"), TEXT("Мир"));
 		return Tr(TEXT("Chaos: creatures"), TEXT("Хаос: существа"));
 	}
 }

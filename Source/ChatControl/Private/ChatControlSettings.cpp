@@ -40,6 +40,14 @@ void FChatControlSettings::AddMissingEffectDefaults()
 		{ TEXT("hub"),      MakeEffect(150, 120.f, 300.f, 0.f,  2) },
 		// Factory: Amount = machines
 		{ TEXT("strike"),   MakeEffect(120, 120.f, 180.f, 60.f, 3, 0.f, 5) },
+		{ TEXT("underclock"), MakeEffect(120, 120.f, 180.f, 60.f, 3, 0.5f, 10) },
+		{ TEXT("blackout"), MakeEffect(200, 300.f, 600.f, 15.f, 4) },
+		// Gifts: rain Amount = stacks, sink Amount = coupons
+		{ TEXT("rain"),     MakeEffect(100, 60.f,  120.f, 0.f,  0, 0.5f, 5) },
+		{ TEXT("sink"),     MakeEffect(300, 300.f, 600.f, 0.f,  0, 0.f, 1) },
+		// World
+		{ TEXT("night"),    MakeEffect(60,  120.f, 120.f, 0.f,  1) },
+		{ TEXT("day"),      MakeEffect(60,  120.f, 120.f, 0.f,  0) },
 		// Creatures
 		{ TEXT("ambush"),   MakeEffect(80,  60.f,  120.f, 0.f,  2, 0.f, 3, 3.f, 5.f) },
 		{ TEXT("boss"),     MakeEffect(300, 180.f, 300.f, 0.f,  4, 0.f, 1, 3.f, 5.f) },
