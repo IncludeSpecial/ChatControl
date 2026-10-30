@@ -212,6 +212,7 @@ void FYouTubeChatConnector::HandleItem(const TSharedPtr<FJsonObject>& Item)
 	Event.DisplayName = (*Author)->GetStringField(TEXT("displayName"));
 	Event.bIsBroadcaster = (*Author)->GetBoolField(TEXT("isChatOwner"));
 	Event.bIsModerator = (*Author)->GetBoolField(TEXT("isChatModerator"));
+	Event.bIsSubscriber = (*Author)->GetBoolField(TEXT("isChatSponsor"));
 	(*Snippet)->TryGetStringField(TEXT("displayMessage"), Event.Text);
 
 	const FString Type = (*Snippet)->GetStringField(TEXT("type"));

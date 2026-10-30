@@ -143,7 +143,7 @@ namespace
 			Subsystem->TrackSpawned(Creature);
 			if (Settings.bCreatureNameTags)
 			{
-				Subsystem->AttachNameTag(Creature, ViewerName, FColor(255, 90, 60), 160.f);
+				Subsystem->AttachNameTag(Creature, ViewerName, Subsystem->GetNameColor(ViewerName, FColor(255, 90, 60)), 160.f);
 			}
 			UE_LOG(LogChatControl, Log, TEXT("Spawned %s %.0f m from player, enabled=%d, controller=%s"),
 				*CreatureClass->GetName(), FVector::Dist(Location, Player->GetActorLocation()) / 100.f,
@@ -666,7 +666,7 @@ TMap<FString, FChatEffect> ChatEffects::CreateAll()
 		Sign->SetRootComponent(Root);
 		Root->RegisterComponent();
 		Sign->SetActorLocation(Location);
-		Ctx.Subsystem->AttachNameTag(Sign, Ctx.ViewerName, FColor(250, 149, 73), 220.f);
+		Ctx.Subsystem->AttachNameTag(Sign, Ctx.ViewerName, Ctx.Subsystem->GetNameColor(Ctx.ViewerName, FColor(250, 149, 73)), 220.f);
 		Ctx.Subsystem->AttachNameTag(Sign, Message, FColor::White, 170.f);
 		Sign->SetLifeSpan(FMath::Max(10.f, Ctx.Settings->Duration));
 		Ctx.Subsystem->TrackSpawned(Sign);

@@ -121,6 +121,8 @@ namespace
 		const FString Badges = Msg.Tag(TEXT("badges"));
 		Event.bIsBroadcaster = Badges.Contains(TEXT("broadcaster/"));
 		Event.bIsModerator = Msg.Tag(TEXT("mod")) == TEXT("1");
+		Event.bIsVip = Badges.Contains(TEXT("vip/")) || !Msg.Tag(TEXT("vip")).IsEmpty();
+		Event.bIsSubscriber = Msg.Tag(TEXT("subscriber")) == TEXT("1") || Badges.Contains(TEXT("founder/"));
 	}
 }
 

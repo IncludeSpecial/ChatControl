@@ -315,6 +315,10 @@ void UChatControlSubsystem::HandleEvent(const FChatEvent& Event)
 	const double Now = FPlatformTime::Seconds();
 	const FString Key = Event.GetEconomyKey();
 	const FText Name = FText::FromString(Event.DisplayName);
+	if (Event.Type != EChatEventType::Raid && Event.Type != EChatEventType::Follow)
+	{
+		ViewerRoles.Add(Event.DisplayName.ToLower(), Event.bIsBroadcaster ? 4 : Event.bIsModerator ? 3 : Event.bIsVip ? 2 : Event.bIsSubscriber ? 1 : 0);
+	}
 
 	switch (Event.Type)
 	{
@@ -843,10 +847,95 @@ bool UChatControlSubsystem::SpawnPet(const FString& ViewerKey, const FString& Vi
 		Creature->SetIsPersistent(true);
 	}
 	Pet->SetLifeSpan(FMath::Max(60.f, Settings.PetLifeSpanSeconds));
-	AttachNameTag(Pet, ViewerName, FColor(120, 255, 120), 120.f);
+	const bool bTamed = FMath::FRand() < Settings.PetTamedChance && TryTamePet(Pet, Player);
+	AttachNameTag(Pet, ViewerName, GetNameColor(ViewerName, FColor(120, 255, 120)), 120.f);
 	Pets.Add(ViewerKey, Pet);
-	Announce(FText::Format(Tr(TEXT("{0}'s pet came to visit!"), TEXT("Питомец {0} пришёл в гости!")), FText::FromString(ViewerName)));
+	Announce(bTamed
+		? FText::Format(Tr(TEXT("{0}'s pet came to visit - and it is already tame!"), TEXT("Питомец {0} пришёл в гости - и он уже ручной!")), FText::FromString(ViewerName))
+		: FText::Format(Tr(TEXT("{0}'s pet came to visit!"), TEXT("Питомец {0} пришёл в гости!")), FText::FromString(ViewerName)));
 	return true;
+}
+
+FColor UChatControlSubsystem::GetNameColor(const FString& ViewerName, const FColor& Default) const
+{
+	const uint8* Role = ViewerRoles.Find(ViewerName.ToLower());
+	if (!Settings.bRoleColors || !Role || *Role == 0)
+	{
+		return Default;
+	}
+	const FString& Hex = *Role == 4 ? Settings.ColorBroadcaster : *Role == 3 ? Settings.ColorModerator : *Role == 2 ? Settings.ColorVip : Settings.ColorSubscriber;
+	FString Clean = Hex.TrimStartAndEnd();
+	Clean.RemoveFromStart(TEXT("#"));
+	return Clean.Len() == 6 ? FColor::FromHex(Clean) : Default;
+}
+
+bool UChatControlSubsystem::TryTamePet(APawn* Pet, AActor* Owner) const
+{
+	// Look on the doggo and its AI controller for something like Tame(Owner) / SetFriendActor(Owner) / bIsTamed
+	TArray<UObject*> Targets = { Pet, Pet->GetController() };
+	bool bTamed = false;
+	for (UObject* Target : Targets)
+	{
+		if (!Target)
+		{
+			continue;
+		}
+		for (TFieldIterator<UFunction> It(Target->GetClass()); It; ++It)
+		{
+			UFunction* Function = *It;
+			const FString FunctionName = Function->GetName();
+			const bool bLooksLikeTame = (FunctionName.Contains(TEXT("Tame")) || FunctionName.Contains(TEXT("Friend")))
+				&& !FunctionName.StartsWith(TEXT("Is")) && !FunctionName.StartsWith(TEXT("Get")) && !FunctionName.Contains(TEXT("Untame"));
+			if (!bLooksLikeTame)
+			{
+				continue;
+			}
+			// Only call simple signatures: no params, or a single actor param that gets the player
+			TArray<FProperty*> Params;
+			for (TFieldIterator<FProperty> P(Function); P && P->HasAnyPropertyFlags(CPF_Parm); ++P)
+			{
+				Params.Add(*P);
+			}
+			const FObjectPropertyBase* ActorParam = Params.Num() == 1 ? CastField<FObjectPropertyBase>(Params[0]) : nullptr;
+			if (Params.Num() == 0 || (ActorParam && !Params[0]->HasAnyPropertyFlags(CPF_ReturnParm | CPF_OutParm) && Owner->IsA(ActorParam->PropertyClass)))
+			{
+				TArray<uint8> Buffer;
+				Buffer.SetNumZeroed(FMath::Max<int32>(1, Function->ParmsSize));
+				if (ActorParam)
+				{
+					ActorParam->SetObjectPropertyValue_InContainer(Buffer.GetData(), Owner);
+				}
+				Target->ProcessEvent(Function, Buffer.GetData());
+				UE_LOG(LogChatControl, Log, TEXT("Pet: called %s::%s"), *Target->GetClass()->GetName(), *FunctionName);
+				bTamed = true;
+			}
+			else
+			{
+				UE_LOG(LogChatControl, Log, TEXT("Pet: skipped %s::%s (%d params)"), *Target->GetClass()->GetName(), *FunctionName, Params.Num());
+			}
+		}
+		for (TFieldIterator<FProperty> It(Target->GetClass()); It; ++It)
+		{
+			const FString PropertyName = It->GetName();
+			if (const FBoolProperty* Flag = CastField<FBoolProperty>(*It); Flag && PropertyName.Contains(TEXT("Tame")))
+			{
+				Flag->SetPropertyValue_InContainer(Target, true);
+				UE_LOG(LogChatControl, Log, TEXT("Pet: set %s::%s = true"), *Target->GetClass()->GetName(), *PropertyName);
+				bTamed = true;
+			}
+			else if (const FObjectPropertyBase* Ref = CastField<FObjectPropertyBase>(*It); Ref && PropertyName.Contains(TEXT("Friend")) && Owner->IsA(Ref->PropertyClass))
+			{
+				Ref->SetObjectPropertyValue_InContainer(Target, Owner);
+				UE_LOG(LogChatControl, Log, TEXT("Pet: set %s::%s = player"), *Target->GetClass()->GetName(), *PropertyName);
+				bTamed = true;
+			}
+		}
+	}
+	if (!bTamed)
+	{
+		UE_LOG(LogChatControl, Warning, TEXT("Pet: no taming function or property found on %s"), *Pet->GetClass()->GetName());
+	}
+	return bTamed;
 }
 
 void UChatControlSubsystem::Panic()

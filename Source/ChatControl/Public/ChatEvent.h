@@ -33,6 +33,9 @@ struct FChatEvent
 
 	bool bIsBroadcaster = false;
 	bool bIsModerator = false;
+	bool bIsVip = false;
+	/** Twitch subscriber or YouTube member */
+	bool bIsSubscriber = false;
 
 	FString GetEconomyKey() const { return Platform + TEXT(":") + UserId; }
 };

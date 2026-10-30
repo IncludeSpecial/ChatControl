@@ -68,6 +68,8 @@ public:
 
 	/** Floating text above an actor that always faces the camera */
 	class UTextRenderComponent* AttachNameTag(AActor* Target, const FString& Text, const FColor& Color, float Height);
+	/** Name tag color for a viewer: their chat role color, or Default for viewers without a role */
+	FColor GetNameColor(const FString& ViewerName, const FColor& Default) const;
 	/** Spawns (or replaces) the viewer's named pet next to the player */
 	bool SpawnPet(const FString& ViewerKey, const FString& ViewerName);
 
@@ -182,6 +184,10 @@ private:
 	TArray<TWeakObjectPtr<class UTextRenderComponent>> NameTags;
 	/** viewer key -> their pet */
 	TMap<FString, TWeakObjectPtr<AActor>> Pets;
+	/** Last seen chat role per viewer name (lower case): 4 streamer, 3 moderator, 2 VIP, 1 subscriber */
+	TMap<FString, uint8> ViewerRoles;
+	/** Lizard doggo taming lives in blueprints, so it is found by name at runtime */
+	bool TryTamePet(APawn* Pet, AActor* Owner) const;
 
 	TMap<FString, double> GlobalCooldownUntil;
 	/** Key: viewerKey|effectId */

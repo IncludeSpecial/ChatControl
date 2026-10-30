@@ -102,6 +102,14 @@ struct FChatControlSettings
 	UPROPERTY() float PetLifeSpanSeconds = 1800.f;
 	/** Show the viewer's name above creatures they sent */
 	UPROPERTY() bool bCreatureNameTags = true;
+	/** Chance (0..1) that a pet arrives already tamed */
+	UPROPERTY() float PetTamedChance = 0.5f;
+	/** Name tag colors by chat role (hex); viewers without a role keep the color of the thing they sent */
+	UPROPERTY() bool bRoleColors = true;
+	UPROPERTY() FString ColorBroadcaster = TEXT("#FF2A4A");
+	UPROPERTY() FString ColorModerator = TEXT("#19E3FF");
+	UPROPERTY() FString ColorVip = TEXT("#FF6AD5");
+	UPROPERTY() FString ColorSubscriber = TEXT("#B57BFF");
 
 	// --- Chat games ---
 	UPROPERTY() bool bVotesEnabled = true;

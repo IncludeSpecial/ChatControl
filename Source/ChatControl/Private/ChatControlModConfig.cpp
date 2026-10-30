@@ -373,6 +373,16 @@ void UChatControlModConfig::Register(UConfigManager* ConfigManager, const FChatC
 		Tr(TEXT("Pets stay for (s)"), TEXT("Питомцы остаются (с)")));
 	AddBool(Viewers, TEXT("CreatureNameTags"), Defaults.bCreatureNameTags,
 		Tr(TEXT("Viewer names above creatures"), TEXT("Ники зрителей над существами")));
+	AddFloat(Viewers, TEXT("PetTamedChance"), Defaults.PetTamedChance,
+		Tr(TEXT("Chance a pet comes tamed (0-1)"), TEXT("Шанс, что питомец уже приручен (0-1)")),
+		Tr(TEXT("0.5 = every second pet follows you right away"), TEXT("0.5 = каждый второй питомец сразу ходит за тобой")));
+	AddBool(Viewers, TEXT("RoleColors"), Defaults.bRoleColors,
+		Tr(TEXT("Name color by chat role"), TEXT("Цвет ника по роли в чате")),
+		Tr(TEXT("Viewers without a role keep the usual color"), TEXT("У зрителей без роли цвет обычный")));
+	AddString(Viewers, TEXT("ColorBroadcaster"), Defaults.ColorBroadcaster, Tr(TEXT("Streamer color"), TEXT("Цвет стримера")), Tr(TEXT("Hex, e.g. #FF2A4A"), TEXT("HEX, например #FF2A4A")));
+	AddString(Viewers, TEXT("ColorModerator"), Defaults.ColorModerator, Tr(TEXT("Moderator color"), TEXT("Цвет модераторов")));
+	AddString(Viewers, TEXT("ColorVip"), Defaults.ColorVip, Tr(TEXT("VIP color"), TEXT("Цвет VIP")));
+	AddString(Viewers, TEXT("ColorSubscriber"), Defaults.ColorSubscriber, Tr(TEXT("Subscriber / member color"), TEXT("Цвет подписчиков и спонсоров")));
 
 	// --- Raids ---
 	UConfigPropertySection* Raids = AddSection(Root, TEXT("Raids"), Tr(TEXT("Raids"), TEXT("Рейды")));
@@ -513,6 +523,12 @@ bool UChatControlModConfig::ApplyTo(UConfigManager* ConfigManager, FChatControlS
 	bChanged |= Read<UConfigPropertyBool>(Viewers, TEXT("PetOnSub"), Settings.bPetOnSub);
 	bChanged |= ReadSeconds(Viewers, TEXT("PetLifeSpan"), Settings.PetLifeSpanSeconds, 1.f, 60.f);
 	bChanged |= Read<UConfigPropertyBool>(Viewers, TEXT("CreatureNameTags"), Settings.bCreatureNameTags);
+	bChanged |= Read<UConfigPropertyFloat>(Viewers, TEXT("PetTamedChance"), Settings.PetTamedChance);
+	bChanged |= Read<UConfigPropertyBool>(Viewers, TEXT("RoleColors"), Settings.bRoleColors);
+	bChanged |= Read<UConfigPropertyString>(Viewers, TEXT("ColorBroadcaster"), Settings.ColorBroadcaster);
+	bChanged |= Read<UConfigPropertyString>(Viewers, TEXT("ColorModerator"), Settings.ColorModerator);
+	bChanged |= Read<UConfigPropertyString>(Viewers, TEXT("ColorVip"), Settings.ColorVip);
+	bChanged |= Read<UConfigPropertyString>(Viewers, TEXT("ColorSubscriber"), Settings.ColorSubscriber);
 
 	const UConfigPropertySection* Raids = GetSection(Root, TEXT("Raids"));
 	bChanged |= Read<UConfigPropertyInteger>(Raids, TEXT("ViewersPerAmbush"), Settings.RaidViewersPerAmbush);
