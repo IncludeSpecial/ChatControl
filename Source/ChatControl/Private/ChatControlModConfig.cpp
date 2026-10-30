@@ -7,6 +7,7 @@
 #include "Configuration/Properties/ConfigPropertyInteger.h"
 #include "Configuration/Properties/ConfigPropertyFloat.h"
 #include "Configuration/Properties/ConfigPropertyString.h"
+#include "Configuration/Properties/WidgetExtension/CP_Section.h"
 #include "Internationalization/Culture.h"
 
 namespace
@@ -36,9 +37,22 @@ namespace
 		return Property;
 	}
 
-	UConfigPropertySection* AddSection(UConfigPropertySection* Parent, const FString& Key, const FText& Name, const FText& Tooltip = FText::GetEmpty())
+	/** The section widget defaults to a horizontal list without a header, which squeezes everything into one row */
+	UConfigPropertySection* NewSection(UObject* Outer, const FText& Name, bool bHasHeader)
 	{
-		UConfigPropertySection* Section = NewProperty<UConfigPropertySection>(Parent, TEXT("BP_ConfigPropertySection"), Name, Tooltip);
+		UConfigPropertySection* Section = NewProperty<UConfigPropertySection>(Outer, TEXT("BP_ConfigPropertySection"), Name, FText::GetEmpty());
+		if (UCP_Section* Widget = Cast<UCP_Section>(Section))
+		{
+			Widget->WidgetType = ECP_SectionWidgetType::CPS_Vertical;
+			Widget->HasHeader = bHasHeader;
+			Widget->HeaderText = Name;
+		}
+		return Section;
+	}
+
+	UConfigPropertySection* AddSection(UConfigPropertySection* Parent, const FString& Key, const FText& Name)
+	{
+		UConfigPropertySection* Section = NewSection(Parent, Name, true);
 		Parent->SectionProperties.Add(Key, Section);
 		return Section;
 	}
@@ -128,7 +142,7 @@ void UChatControlModConfig::Register(UConfigManager* ConfigManager, const FChatC
 	CDO->DisplayName = FText::FromString(TEXT("ChatControl"));
 	CDO->Description = Tr(TEXT("Let your Twitch chat play with you"), TEXT("Твой чат на Twitch играет вместе с тобой"));
 
-	UConfigPropertySection* Root = NewProperty<UConfigPropertySection>(CDO, TEXT("BP_ConfigPropertySection"), FText::GetEmpty(), FText::GetEmpty());
+	UConfigPropertySection* Root = NewSection(CDO, FText::GetEmpty(), false);
 	CDO->RootSection = Root;
 
 	// --- General ---
