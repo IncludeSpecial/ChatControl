@@ -61,6 +61,13 @@ struct FChatControlSettings
 	UPROPERTY() float SpawnDistanceMin = 6.f;
 	UPROPERTY() float SpawnDistanceMax = 10.f;
 
+	// --- Viewers in the world ---
+	/** A subscription brings the viewer's named pet */
+	UPROPERTY() bool bPetOnSub = true;
+	UPROPERTY() float PetLifeSpanSeconds = 1800.f;
+	/** Show the viewer's name above creatures they sent */
+	UPROPERTY() bool bCreatureNameTags = true;
+
 	// --- Raids ---
 	/** One ambush per this many raiders */
 	UPROPERTY() int32 RaidViewersPerAmbush = 5;

@@ -88,7 +88,7 @@ namespace
 	}
 
 	template <int32 N>
-	int32 SpawnCreatures(UChatControlSubsystem* Subsystem, UWorld* World, const AFGCharacterPlayer* Player, const FChatControlSettings& Settings, const TCHAR* (&Pool)[N], int32 Count)
+	int32 SpawnCreatures(UChatControlSubsystem* Subsystem, UWorld* World, const AFGCharacterPlayer* Player, const FChatControlSettings& Settings, const TCHAR* (&Pool)[N], int32 Count, const FString& ViewerName)
 	{
 		int32 Spawned = 0;
 		for (int32 i = 0; i < Count; ++i)
@@ -120,6 +120,10 @@ namespace
 			}
 			Creature->SetLifeSpan(FMath::Max(10.f, Settings.CreatureLifeSpanSeconds));
 			Subsystem->TrackSpawned(Creature);
+			if (Settings.bCreatureNameTags)
+			{
+				Subsystem->AttachNameTag(Creature, ViewerName, FColor(255, 90, 60), 160.f);
+			}
 			UE_LOG(LogChatControl, Log, TEXT("Spawned %s %.0f m from player, enabled=%d, controller=%s"),
 				*CreatureClass->GetName(), FVector::Dist(Location, Player->GetActorLocation()) / 100.f,
 				FGCreature ? FGCreature->GetIsEnabled() : -1, *GetNameSafe(Creature->GetController()));
@@ -157,7 +161,7 @@ namespace
 			{
 				return;
 			}
-			const int32 Spawned = SpawnCreatures(Subsystem, World, Player, Subsystem->GetSettings(), Pool, Count);
+			const int32 Spawned = SpawnCreatures(Subsystem, World, Player, Subsystem->GetSettings(), Pool, Count, Viewer);
 			if (Spawned > 0)
 			{
 				Subsystem->Announce(FText::Format(Arrival, FText::AsNumber(Spawned), FText::FromString(Viewer)));
@@ -603,6 +607,41 @@ TMap<FString, FChatEffect> ChatEffects::CreateAll()
 	Add(TEXT("day"), false, [SetTime](const FChatEffectContext& Ctx)
 	{
 		return SetTime(Ctx, 12.f, FText::Format(Tr(TEXT("{0} brought the sun back!"), TEXT("{0} возвращает солнце!")), FText::FromString(Ctx.ViewerName)));
+	});
+
+	Add(TEXT("sign"), false, [](const FChatEffectContext& Ctx)
+	{
+		FString Message = Ctx.Args.Left(80);
+		if (Message.IsEmpty())
+		{
+			return false;
+		}
+		// A floating sign on the ground in front of the player
+		FCollisionQueryParams Params(TEXT("ChatControlSign"), false, Ctx.Player);
+		const FVector Probe = Ctx.Player->GetActorLocation() + Ctx.Player->GetActorForwardVector() * 400.f;
+		FHitResult Ground;
+		const FVector Location = Ctx.World->LineTraceSingleByChannel(Ground, Probe + FVector(0, 0, 300.f), Probe - FVector(0, 0, 1000.f), ECC_Visibility, Params)
+			? Ground.ImpactPoint : Probe;
+		AActor* Sign = Ctx.World->SpawnActor<AActor>(AActor::StaticClass(), FTransform(Location));
+		if (!Sign)
+		{
+			return false;
+		}
+		USceneComponent* Root = NewObject<USceneComponent>(Sign);
+		Sign->SetRootComponent(Root);
+		Root->RegisterComponent();
+		Sign->SetActorLocation(Location);
+		Ctx.Subsystem->AttachNameTag(Sign, Ctx.ViewerName, FColor(250, 149, 73), 220.f);
+		Ctx.Subsystem->AttachNameTag(Sign, Message, FColor::White, 170.f);
+		Sign->SetLifeSpan(FMath::Max(10.f, Ctx.Settings->Duration));
+		Ctx.Subsystem->TrackSpawned(Sign);
+		Ctx.Subsystem->Announce(FText::Format(Tr(TEXT("{0} left a sign: {1}"), TEXT("{0} оставляет табличку: {1}")), FText::FromString(Ctx.ViewerName), FText::FromString(Message)));
+		return true;
+	});
+
+	Add(TEXT("pet"), false, [](const FChatEffectContext& Ctx)
+	{
+		return Ctx.Subsystem->SpawnPet(TEXT("pet:") + Ctx.ViewerName.ToLower(), Ctx.ViewerName);
 	});
 
 	Add(TEXT("ambush"), true, [](const FChatEffectContext& Ctx)

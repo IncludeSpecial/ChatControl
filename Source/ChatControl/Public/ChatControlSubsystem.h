@@ -61,6 +61,11 @@ public:
 	/** Cancels everything chat started: queue, delayed spawns, timed effects, creatures */
 	void Panic();
 
+	/** Floating text above an actor that always faces the camera */
+	class UTextRenderComponent* AttachNameTag(AActor* Target, const FString& Text, const FColor& Color, float Height);
+	/** Spawns (or replaces) the viewer's named pet next to the player */
+	bool SpawnPet(const FString& ViewerKey, const FString& ViewerName);
+
 private:
 	struct FPendingChaos
 	{
@@ -68,6 +73,7 @@ private:
 		FString ViewerKey;
 		FString ViewerName;
 		int32 PaidChips = 0;
+		FString Args;
 	};
 
 	struct FTimedEffect
@@ -84,9 +90,11 @@ private:
 	void HandleEvent(const FChatEvent& Event);
 	void HandleCommand(const FChatEvent& Event);
 	/** Validates cooldowns and price, then runs or queues the effect. bFree skips the price (rewards, raids, Auto-Chaos). */
-	void RequestEffect(const FString& EffectId, const FString& ViewerKey, const FString& ViewerName, bool bFree);
+	void RequestEffect(const FString& EffectId, const FString& ViewerKey, const FString& ViewerName, bool bFree, const FString& Args = FString());
 	/** Returns false if the effect could not run right now */
-	bool ExecuteEffect(const FChatEffect& Effect, const FString& ViewerName);
+	bool ExecuteEffect(const FChatEffect& Effect, const FString& ViewerName, const FString& Args = FString());
+	/** Keeps name tags readable by turning them to the camera */
+	void TickNameTags();
 
 	void TickEconomy(double Now);
 	void TickChaosQueue(double Now);
@@ -116,6 +124,9 @@ private:
 	TMap<FString, FTimedEffect> TimedEffects;
 	TArray<TPair<double, TFunction<void()>>> DelayedActions;
 	TArray<TWeakObjectPtr<AActor>> SpawnedActors;
+	TArray<TWeakObjectPtr<class UTextRenderComponent>> NameTags;
+	/** viewer key -> their pet */
+	TMap<FString, TWeakObjectPtr<AActor>> Pets;
 
 	TMap<FString, double> GlobalCooldownUntil;
 	/** Key: viewerKey|effectId */

@@ -155,6 +155,8 @@ namespace
 		{ TEXT("sink"),    TEXT("Gifts"),     TEXT("!sink - AWESOME Sink coupons"), TEXT("!sink - купоны AWESOME Sink") },
 		{ TEXT("night"),   TEXT("World"),     TEXT("!night - midnight"),         TEXT("!night - полночь") },
 		{ TEXT("day"),     TEXT("World"),     TEXT("!day - noon"),               TEXT("!day - полдень") },
+		{ TEXT("sign"),    TEXT("Viewers"),   TEXT("!sign <text> - floating sign (duration = how long it stays)"), TEXT("!sign <текст> - табличка (длительность = сколько висит)") },
+		{ TEXT("pet"),     TEXT("Viewers"),   TEXT("!pet - named pet"),          TEXT("!pet - именной питомец") },
 		{ TEXT("ambush"),  TEXT("Creatures"), TEXT("!ambush - enemy ambush"),    TEXT("!ambush - засада врагов") },
 		{ TEXT("boss"),    TEXT("Creatures"), TEXT("!boss - alpha monster"),     TEXT("!boss - альфа-монстр") },
 	};
@@ -166,6 +168,7 @@ namespace
 		if (Category == TEXT("Movement")) return Tr(TEXT("Chaos: player"), TEXT("Хаос: игрок"));
 		if (Category == TEXT("Factory"))  return Tr(TEXT("Chaos: factory"), TEXT("Хаос: фабрика"));
 		if (Category == TEXT("World"))    return Tr(TEXT("World"), TEXT("Мир"));
+		if (Category == TEXT("Viewers"))  return Tr(TEXT("Viewers in the world"), TEXT("Зрители в мире"));
 		return Tr(TEXT("Chaos: creatures"), TEXT("Хаос: существа"));
 	}
 }
@@ -281,6 +284,15 @@ void UChatControlModConfig::Register(UConfigManager* ConfigManager, const FChatC
 	AddInt(AutoChaos, TEXT("IdleMinutes"), FMath::RoundToInt(Defaults.AutoChaosIdleSeconds / 60.f),
 		Tr(TEXT("After quiet time (min)"), TEXT("После тишины (мин)")));
 
+	// --- Viewers in the world ---
+	UConfigPropertySection* Viewers = AddSection(Root, TEXT("Viewers"), Tr(TEXT("Viewers in the world"), TEXT("Зрители в мире")));
+	AddBool(Viewers, TEXT("PetOnSub"), Defaults.bPetOnSub,
+		Tr(TEXT("Pet for a subscription"), TEXT("Питомец за подписку")));
+	AddInt(Viewers, TEXT("PetLifeSpan"), FMath::RoundToInt(Defaults.PetLifeSpanSeconds),
+		Tr(TEXT("Pets stay for (s)"), TEXT("Питомцы остаются (с)")));
+	AddBool(Viewers, TEXT("CreatureNameTags"), Defaults.bCreatureNameTags,
+		Tr(TEXT("Viewer names above creatures"), TEXT("Ники зрителей над существами")));
+
 	// --- Raids ---
 	UConfigPropertySection* Raids = AddSection(Root, TEXT("Raids"), Tr(TEXT("Raids"), TEXT("Рейды")));
 	AddInt(Raids, TEXT("ViewersPerAmbush"), Defaults.RaidViewersPerAmbush,
@@ -362,6 +374,11 @@ bool UChatControlModConfig::ApplyTo(UConfigManager* ConfigManager, FChatControlS
 	const UConfigPropertySection* AutoChaos = GetSection(Root, TEXT("AutoChaos"));
 	bChanged |= Read<UConfigPropertyBool>(AutoChaos, TEXT("Enabled"), Settings.bAutoChaos);
 	bChanged |= ReadSeconds(AutoChaos, TEXT("IdleMinutes"), Settings.AutoChaosIdleSeconds, 60.f, 60.f);
+
+	const UConfigPropertySection* Viewers = GetSection(Root, TEXT("Viewers"));
+	bChanged |= Read<UConfigPropertyBool>(Viewers, TEXT("PetOnSub"), Settings.bPetOnSub);
+	bChanged |= ReadSeconds(Viewers, TEXT("PetLifeSpan"), Settings.PetLifeSpanSeconds, 1.f, 60.f);
+	bChanged |= Read<UConfigPropertyBool>(Viewers, TEXT("CreatureNameTags"), Settings.bCreatureNameTags);
 
 	const UConfigPropertySection* Raids = GetSection(Root, TEXT("Raids"));
 	bChanged |= Read<UConfigPropertyInteger>(Raids, TEXT("ViewersPerAmbush"), Settings.RaidViewersPerAmbush);

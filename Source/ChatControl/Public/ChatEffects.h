@@ -15,6 +15,8 @@ struct FChatEffectContext
 	const FChatEffectSettings* Settings = nullptr;
 	/** Who triggered it, for announcements */
 	FString ViewerName;
+	/** Text after the command, original case (e.g. the message for !sign) */
+	FString Args;
 };
 
 struct FChatEffect

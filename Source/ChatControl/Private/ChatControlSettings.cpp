@@ -48,6 +48,9 @@ void FChatControlSettings::AddMissingEffectDefaults()
 		// World
 		{ TEXT("night"),    MakeEffect(60,  120.f, 120.f, 0.f,  1) },
 		{ TEXT("day"),      MakeEffect(60,  120.f, 120.f, 0.f,  0) },
+		// Viewers in the world: sign Duration = how long it stays
+		{ TEXT("sign"),     MakeEffect(20,  10.f,  120.f, 600.f, 0) },
+		{ TEXT("pet"),      MakeEffect(100, 30.f,  1800.f, 0.f, 0) },
 		// Creatures
 		{ TEXT("ambush"),   MakeEffect(80,  60.f,  120.f, 0.f,  2, 0.f, 3, 3.f, 5.f) },
 		{ TEXT("boss"),     MakeEffect(300, 180.f, 300.f, 0.f,  4, 0.f, 1, 3.f, 5.f) },

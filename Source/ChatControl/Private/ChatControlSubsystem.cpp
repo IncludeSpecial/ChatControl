@@ -8,6 +8,7 @@
 #include "EngineUtils.h"
 #include "GameFramework/GameStateBase.h"
 #include "Buildables/FGBuildableTradingPost.h"
+#include "Components/TextRenderComponent.h"
 #include "ChatText.h"
 
 using ChatText::Tr;
@@ -150,6 +151,7 @@ void UChatControlSubsystem::Tick(float DeltaTime)
 	TickEconomy(Now);
 	TickTimedEffects(Now);
 	TickDelayedActions(Now);
+	TickNameTags();
 	TickChaosQueue(Now);
 	TickAutoChaos(Now);
 }
@@ -230,6 +232,10 @@ void UChatControlSubsystem::HandleEvent(const FChatEvent& Event)
 	case EChatEventType::Subscription:
 		Economy.AddChips(Key, Event.DisplayName, Settings.ChipsPerSub);
 		Announce(FText::Format(Tr(TEXT("{0} subscribed and got {1} chips! Thank you!"), TEXT("{0} подписался(ась) и получил(а) {1} чипов! Спасибо!")), Name, FText::AsNumber(Settings.ChipsPerSub)));
+		if (Settings.bPetOnSub)
+		{
+			SpawnPet(Key, Event.DisplayName);
+		}
 		break;
 
 	case EChatEventType::GiftSubs:
@@ -287,7 +293,8 @@ void UChatControlSubsystem::HandleCommand(const FChatEvent& Event)
 		Command = Text.RightChop(1);
 	}
 	Command = Command.ToLower();
-	Args = Args.TrimStartAndEnd().ToLower();
+	const FString RawArgs = Args.TrimStartAndEnd();
+	Args = RawArgs.ToLower();
 
 	const FString Key = Event.GetEconomyKey();
 	const FText Name = FText::FromString(Event.DisplayName);
@@ -340,7 +347,7 @@ void UChatControlSubsystem::HandleCommand(const FChatEvent& Event)
 
 	if (Effects.Contains(Command))
 	{
-		RequestEffect(Command, Key, Event.DisplayName, false);
+		RequestEffect(Command, Key, Event.DisplayName, false, RawArgs);
 	}
 }
 
@@ -400,7 +407,7 @@ void UChatControlSubsystem::HandleTestCommand(const FChatEvent& Event, const FSt
 	}
 }
 
-void UChatControlSubsystem::RequestEffect(const FString& EffectId, const FString& ViewerKey, const FString& ViewerName, bool bFree)
+void UChatControlSubsystem::RequestEffect(const FString& EffectId, const FString& ViewerKey, const FString& ViewerName, bool bFree, const FString& Args)
 {
 	const FChatEffect* Effect = Effects.Find(EffectId);
 	const FChatEffectSettings* EffectSettings = Settings.Effects.Find(EffectId);
@@ -440,17 +447,17 @@ void UChatControlSubsystem::RequestEffect(const FString& EffectId, const FString
 
 	if (Effect->bHarmful)
 	{
-		ChaosQueue.Add({ EffectId, ViewerKey, ViewerName, Cost });
+		ChaosQueue.Add({ EffectId, ViewerKey, ViewerName, Cost, Args });
 		return;
 	}
 
-	if (!ExecuteEffect(*Effect, ViewerName) && Cost > 0)
+	if (!ExecuteEffect(*Effect, ViewerName, Args) && Cost > 0)
 	{
 		Economy.AddChips(ViewerKey, ViewerName, Cost);
 	}
 }
 
-bool UChatControlSubsystem::ExecuteEffect(const FChatEffect& Effect, const FString& ViewerName)
+bool UChatControlSubsystem::ExecuteEffect(const FChatEffect& Effect, const FString& ViewerName, const FString& Args)
 {
 	FChatEffectContext Ctx;
 	Ctx.World = GetGameWorld();
@@ -458,6 +465,7 @@ bool UChatControlSubsystem::ExecuteEffect(const FChatEffect& Effect, const FStri
 	Ctx.Subsystem = this;
 	Ctx.Settings = Settings.Effects.Find(Effect.Id);
 	Ctx.ViewerName = ViewerName;
+	Ctx.Args = Args;
 
 	if (!Ctx.World || !Ctx.Player || !Ctx.Settings)
 	{
@@ -513,7 +521,7 @@ void UChatControlSubsystem::TickChaosQueue(double Now)
 		{
 			continue;
 		}
-		if (ExecuteEffect(*Effect, Pending.ViewerName))
+		if (ExecuteEffect(*Effect, Pending.ViewerName, Pending.Args))
 		{
 			ChaosHistory.Add({ Now, EffectSettings->ChaosWeight });
 			ChaosQueue.RemoveAt(i);
@@ -585,6 +593,87 @@ bool UChatControlSubsystem::IsInSafeZone() const
 	const AFGCharacterPlayer* Player = FindPlayer();
 	return Settings.SafeZoneRadius > 0.f && Player && GetHubLocation(Hub) &&
 		FVector::Dist2D(Player->GetActorLocation(), Hub) < Settings.SafeZoneRadius * 100.f;
+}
+
+UTextRenderComponent* UChatControlSubsystem::AttachNameTag(AActor* Target, const FString& Text, const FColor& Color, float Height)
+{
+	if (!Target || !Target->GetRootComponent())
+	{
+		return nullptr;
+	}
+	UTextRenderComponent* Tag = NewObject<UTextRenderComponent>(Target);
+	Tag->SetupAttachment(Target->GetRootComponent());
+	Tag->SetRelativeLocation(FVector(0, 0, Height));
+	Tag->SetHorizontalAlignment(EHTA_Center);
+	Tag->SetVerticalAlignment(EVRTA_TextCenter);
+	Tag->SetWorldSize(40.f);
+	Tag->SetTextRenderColor(Color);
+	Tag->SetText(FText::FromString(Text));
+	Tag->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Tag->SetCastShadow(false);
+	Tag->RegisterComponent();
+	NameTags.Add(Tag);
+	return Tag;
+}
+
+void UChatControlSubsystem::TickNameTags()
+{
+	if (NameTags.Num() == 0)
+	{
+		return;
+	}
+	UWorld* World = GetGameWorld();
+	APlayerController* Controller = World ? World->GetFirstPlayerController() : nullptr;
+	if (!Controller || !Controller->PlayerCameraManager)
+	{
+		return;
+	}
+	const FVector Camera = Controller->PlayerCameraManager->GetCameraLocation();
+	NameTags.RemoveAll([](const TWeakObjectPtr<UTextRenderComponent>& Tag) { return !Tag.IsValid(); });
+	for (const TWeakObjectPtr<UTextRenderComponent>& Tag : NameTags)
+	{
+		// Text faces +X, so point +X at the camera (yaw only, stays upright)
+		FRotator Facing = (Camera - Tag->GetComponentLocation()).Rotation();
+		Facing.Pitch = 0.f;
+		Facing.Roll = 0.f;
+		Tag->SetWorldRotation(Facing);
+	}
+}
+
+bool UChatControlSubsystem::SpawnPet(const FString& ViewerKey, const FString& ViewerName)
+{
+	UWorld* World = GetGameWorld();
+	AFGCharacterPlayer* Player = FindPlayer();
+	if (!World || !Player)
+	{
+		return false;
+	}
+	UClass* PetClass = LoadClass<APawn>(nullptr, TEXT("/Game/FactoryGame/Character/Creature/Wildlife/SpaceRabbit/Char_SpaceRabbit.Char_SpaceRabbit_C"));
+	if (!PetClass)
+	{
+		return false;
+	}
+	if (TWeakObjectPtr<AActor>* Old = Pets.Find(ViewerKey); Old && Old->IsValid())
+	{
+		(*Old)->Destroy();
+	}
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+	const FVector Location = Player->GetActorLocation() + Player->GetActorRightVector() * 250.f;
+	APawn* Pet = World->SpawnActor<APawn>(PetClass, Location, Player->GetActorRotation(), Params);
+	if (!Pet)
+	{
+		return false;
+	}
+	if (!Pet->GetController())
+	{
+		Pet->SpawnDefaultController();
+	}
+	Pet->SetLifeSpan(FMath::Max(60.f, Settings.PetLifeSpanSeconds));
+	AttachNameTag(Pet, ViewerName, FColor(120, 255, 120), 120.f);
+	Pets.Add(ViewerKey, Pet);
+	Announce(FText::Format(Tr(TEXT("{0}'s pet came to visit!"), TEXT("Питомец {0} пришёл в гости!")), FText::FromString(ViewerName)));
+	return true;
 }
 
 void UChatControlSubsystem::Panic()
