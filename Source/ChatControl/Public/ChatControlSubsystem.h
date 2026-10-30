@@ -47,6 +47,12 @@ public:
 	/** The local player character, or null in menus and loading screens */
 	AFGCharacterPlayer* FindPlayer() const;
 
+	/** Runs Action on the game thread after Delay seconds (real time) */
+	void RunDelayed(float Delay, TFunction<void()> Action);
+
+	UWorld* GetGameWorld() const;
+	const FChatControlSettings& GetSettings() const { return Settings; }
+
 private:
 	struct FPendingChaos
 	{
@@ -78,6 +84,7 @@ private:
 	void TickChaosQueue(double Now);
 	void TickAutoChaos(double Now);
 	void TickTimedEffects(double Now);
+	void TickDelayedActions(double Now);
 
 	int32 GetScaledCost(int32 BaseCost, double Now) const;
 	int32 GetChaosBudgetUsed(double Now) const;
@@ -99,6 +106,7 @@ private:
 	/** (time, weight) of harmful effects executed within the last minute */
 	TArray<TPair<double, int32>> ChaosHistory;
 	TMap<FString, FTimedEffect> TimedEffects;
+	TArray<TPair<double, TFunction<void()>>> DelayedActions;
 
 	TMap<FString, double> GlobalCooldownUntil;
 	/** Key: viewerKey|effectId */

@@ -7,8 +7,9 @@
 #include "Resources/FGItemDescriptor.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Creature/FGCreature.h"
+#include "ChatText.h"
 
-#define LOCTEXT_NAMESPACE "ChatControl"
+using ChatText::Tr;
 
 namespace
 {
@@ -45,14 +46,11 @@ namespace
 		TEXT("/Game/FactoryGame/Character/Creature/Enemy/Spitter/SpitterForest/Char_SpitterForestAlpha.Char_SpitterForestAlpha_C"),
 	};
 
-	/** Spawned creatures despawn after this long, so chat can't flood the save with enemies */
-	constexpr float CreatureLifeSpan = 300.f;
-
 	/**
 	 * Finds ground on a ring around the player at roughly the player's height and in line of sight,
 	 * so creatures don't end up on tree tops, roofs or behind walls.
 	 */
-	bool FindSpawnPoint(UWorld* World, const AActor* Player, FVector& OutLocation)
+	bool FindSpawnPoint(UWorld* World, const AActor* Player, const FChatControlSettings& Settings, FVector& OutLocation)
 	{
 		const FVector Center = Player->GetActorLocation();
 		FCollisionQueryParams Params(TEXT("ChatControlSpawn"), false, Player);
@@ -60,7 +58,9 @@ namespace
 		{
 			const float Angle = FMath::FRandRange(0.f, 2.f * PI);
 			// Start close and widen the ring if nothing fits
-			const float Distance = FMath::FRandRange(600.f, 900.f) + Attempt * 50.f;
+			const float MinDistance = FMath::Max(1.f, Settings.SpawnDistanceMin) * 100.f;
+			const float MaxDistance = FMath::Max(Settings.SpawnDistanceMin, Settings.SpawnDistanceMax) * 100.f;
+			const float Distance = FMath::FRandRange(MinDistance, MaxDistance) + Attempt * 50.f;
 			const FVector Probe = Center + FVector(FMath::Cos(Angle), FMath::Sin(Angle), 0.f) * Distance;
 
 			// The spot must be visible from the player at chest height
@@ -80,22 +80,22 @@ namespace
 	}
 
 	template <int32 N>
-	int32 SpawnCreatures(const FChatEffectContext& Ctx, const TCHAR* (&Pool)[N], int32 Count)
+	int32 SpawnCreatures(UWorld* World, const AFGCharacterPlayer* Player, const FChatControlSettings& Settings, const TCHAR* (&Pool)[N], int32 Count)
 	{
 		int32 Spawned = 0;
 		for (int32 i = 0; i < Count; ++i)
 		{
 			UClass* CreatureClass = LoadClass<APawn>(nullptr, Pool[FMath::RandRange(0, N - 1)]);
 			FVector Location;
-			if (!CreatureClass || !FindSpawnPoint(Ctx.World, Ctx.Player, Location))
+			if (!CreatureClass || !FindSpawnPoint(World, Player, Settings, Location))
 			{
 				continue;
 			}
 			// Face the player so they notice them and aggro quickly
-			const FRotator Facing((Ctx.Player->GetActorLocation() - Location).GetSafeNormal2D().Rotation());
+			const FRotator Facing((Player->GetActorLocation() - Location).GetSafeNormal2D().Rotation());
 			FActorSpawnParameters Params;
 			Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButDontSpawnIfColliding;
-			APawn* Creature = Ctx.World->SpawnActor<APawn>(CreatureClass, Location, Facing, Params);
+			APawn* Creature = World->SpawnActor<APawn>(CreatureClass, Location, Facing, Params);
 			if (!Creature)
 			{
 				continue;
@@ -110,9 +110,9 @@ namespace
 			{
 				FGCreature->SetIsPersistent(true);
 			}
-			Creature->SetLifeSpan(CreatureLifeSpan);
+			Creature->SetLifeSpan(FMath::Max(10.f, Settings.CreatureLifeSpanSeconds));
 			UE_LOG(LogChatControl, Log, TEXT("Spawned %s %.0f m from player, enabled=%d, controller=%s"),
-				*CreatureClass->GetName(), FVector::Dist(Location, Ctx.Player->GetActorLocation()) / 100.f,
+				*CreatureClass->GetName(), FVector::Dist(Location, Player->GetActorLocation()) / 100.f,
 				FGCreature ? FGCreature->GetIsEnabled() : -1, *GetNameSafe(Creature->GetController()));
 			++Spawned;
 		}
@@ -121,6 +121,43 @@ namespace
 			UE_LOG(LogChatControl, Warning, TEXT("No creatures spawned (no ground found or classes failed to load)"));
 		}
 		return Spawned;
+	}
+
+	/**
+	 * Warns the player, then spawns after a random delay (DelayMin..DelayMax) so there is a moment to react.
+	 * Warning args: {0} viewer, {1} count, {2} seconds. Arrival args: {0} spawned count, {1} viewer.
+	 */
+	template <int32 N>
+	bool SpawnCreaturesDelayed(const FChatEffectContext& Ctx, const TCHAR* (&Pool)[N], const FText& Warning, const FText& Arrival)
+	{
+		const int32 Count = FMath::Max(1, Ctx.Settings->Amount);
+		const float Delay = FMath::Max(0.f, FMath::FRandRange(Ctx.Settings->DelayMin, FMath::Max(Ctx.Settings->DelayMin, Ctx.Settings->DelayMax)));
+		UChatControlSubsystem* Subsystem = Ctx.Subsystem;
+		const FString Viewer = Ctx.ViewerName;
+
+		auto Spawn = [Subsystem, &Pool, Count, Viewer, Arrival]
+		{
+			UWorld* World = Subsystem->GetGameWorld();
+			const AFGCharacterPlayer* Player = Subsystem->FindPlayer();
+			if (!World || !Player)
+			{
+				return;
+			}
+			const int32 Spawned = SpawnCreatures(World, Player, Subsystem->GetSettings(), Pool, Count);
+			if (Spawned > 0)
+			{
+				Subsystem->Announce(FText::Format(Arrival, FText::AsNumber(Spawned), FText::FromString(Viewer)));
+			}
+		};
+
+		if (Delay < 0.1f)
+		{
+			Spawn();
+			return true;
+		}
+		Subsystem->Announce(FText::Format(Warning, FText::FromString(Viewer), FText::AsNumber(Count), FText::AsNumber(FMath::RoundToInt(Delay))));
+		Subsystem->RunDelayed(Delay, MoveTemp(Spawn));
+		return true;
 	}
 
 	template <int32 N>
@@ -137,14 +174,14 @@ namespace
 			UE_LOG(LogChatControl, Warning, TEXT("Gift item class failed to load"));
 			return false;
 		}
-		const int32 Amount = FMath::Max(1, FMath::RoundToInt(UFGItemDescriptor::GetStackSize(ItemClass) * StackFraction));
+		const int32 Amount = FMath::Max(1, FMath::RoundToInt(UFGItemDescriptor::GetStackSize(ItemClass) * FMath::Clamp(StackFraction, 0.01f, 1.f)));
 		const int32 Added = Inventory->AddStack(FInventoryStack(Amount, ItemClass), true);
 		if (Added <= 0)
 		{
-			Ctx.Subsystem->Announce(FText::Format(LOCTEXT("GiftInventoryFull", "{0} tried to send you a gift, but your inventory is full!"), FText::FromString(Ctx.ViewerName)));
+			Ctx.Subsystem->Announce(FText::Format(Tr(TEXT("{0} tried to send you a gift, but your inventory is full!"), TEXT("{0} хотел(а) прислать подарок, но инвентарь полон!")), FText::FromString(Ctx.ViewerName)));
 			return false;
 		}
-		Ctx.Subsystem->Announce(FText::Format(LOCTEXT("Gift", "{0} sent you {1} x {2}!"),
+		Ctx.Subsystem->Announce(FText::Format(Tr(TEXT("{0} sent you {1} x {2}!"), TEXT("{0} прислал(а) тебе {1} x {2}!")),
 			FText::FromString(Ctx.ViewerName), FText::AsNumber(Added), UFGItemDescriptor::GetItemName(ItemClass)));
 		return true;
 	}
@@ -233,59 +270,55 @@ TMap<FString, FChatEffect> ChatEffects::CreateAll()
 
 	Add(TEXT("hi"), false, [](const FChatEffectContext& Ctx)
 	{
-		Ctx.Subsystem->Announce(FText::Format(LOCTEXT("Hi", "{0} waves at you!"), FText::FromString(Ctx.ViewerName)));
+		Ctx.Subsystem->Announce(FText::Format(Tr(TEXT("{0} waves at you!"), TEXT("{0} машет тебе!")), FText::FromString(Ctx.ViewerName)));
 		return true;
 	});
 
 	Add(TEXT("gift"), false, [](const FChatEffectContext& Ctx)
 	{
-		return GiveRandomItem(Ctx, BasicGiftPool, 0.5f);
+		return GiveRandomItem(Ctx, BasicGiftPool, Ctx.Settings->Strength);
 	});
 
 	Add(TEXT("biggift"), false, [](const FChatEffectContext& Ctx)
 	{
-		return GiveRandomItem(Ctx, AdvancedGiftPool, 0.5f);
+		return GiveRandomItem(Ctx, AdvancedGiftPool, Ctx.Settings->Strength);
 	});
 
 	Add(TEXT("jump"), true, [](const FChatEffectContext& Ctx)
 	{
-		return BoostJumpsTemporarily(Ctx, 2.5f,
-			FText::Format(LOCTEXT("Jump", "{0} gave you super jump for {1} s!"), FText::FromString(Ctx.ViewerName), FText::AsNumber(FMath::RoundToInt(Ctx.Settings->Duration))));
+		return BoostJumpsTemporarily(Ctx, Ctx.Settings->Strength,
+			FText::Format(Tr(TEXT("{0} gave you super jump for {1} s!"), TEXT("{0} дарит тебе супер-прыжок на {1} с!")),
+				FText::FromString(Ctx.ViewerName), FText::AsNumber(FMath::RoundToInt(Ctx.Settings->Duration))));
 	});
 
 	Add(TEXT("moon"), true, [](const FChatEffectContext& Ctx)
 	{
-		return ScaleGravityTemporarily(Ctx, 0.25f,
-			FText::Format(LOCTEXT("Moon", "{0} switched on moon gravity for {1} s!"), FText::FromString(Ctx.ViewerName), FText::AsNumber(FMath::RoundToInt(Ctx.Settings->Duration))));
+		return ScaleGravityTemporarily(Ctx, Ctx.Settings->Strength,
+			FText::Format(Tr(TEXT("{0} switched on moon gravity for {1} s!"), TEXT("{0} включает лунную гравитацию на {1} с!")),
+				FText::FromString(Ctx.ViewerName), FText::AsNumber(FMath::RoundToInt(Ctx.Settings->Duration))));
 	});
 
 	Add(TEXT("heavy"), true, [](const FChatEffectContext& Ctx)
 	{
-		return ScaleGravityTemporarily(Ctx, 3.f,
-			FText::Format(LOCTEXT("Heavy", "{0} made you heavy for {1} s!"), FText::FromString(Ctx.ViewerName), FText::AsNumber(FMath::RoundToInt(Ctx.Settings->Duration))));
+		return ScaleGravityTemporarily(Ctx, Ctx.Settings->Strength,
+			FText::Format(Tr(TEXT("{0} made you heavy for {1} s!"), TEXT("{0} делает тебя тяжёлым на {1} с!")),
+				FText::FromString(Ctx.ViewerName), FText::AsNumber(FMath::RoundToInt(Ctx.Settings->Duration))));
 	});
 
 	Add(TEXT("ambush"), true, [](const FChatEffectContext& Ctx)
 	{
-		const int32 Spawned = SpawnCreatures(Ctx, SmallCreaturePool, FMath::Max(1, Ctx.Settings->Amount));
-		if (Spawned > 0)
-		{
-			Ctx.Subsystem->Announce(FText::Format(LOCTEXT("Ambush", "{0} sent an ambush: {1} enemies incoming!"), FText::FromString(Ctx.ViewerName), FText::AsNumber(Spawned)));
-		}
-		return Spawned > 0;
+		return SpawnCreaturesDelayed(Ctx, SmallCreaturePool,
+			Tr(TEXT("{0} is sending an ambush: {1} enemies in {2} s!"), TEXT("{0} готовит засаду: {1} врагов через {2} с!")),
+			Tr(TEXT("Ambush! {0} enemies from {1}!"), TEXT("Засада! {0} врагов от {1}!")));
 	});
 
 	Add(TEXT("boss"), true, [](const FChatEffectContext& Ctx)
 	{
-		const int32 Spawned = SpawnCreatures(Ctx, BossCreaturePool, FMath::Max(1, Ctx.Settings->Amount));
-		if (Spawned > 0)
-		{
-			Ctx.Subsystem->Announce(FText::Format(LOCTEXT("Boss", "{0} summoned a BOSS! Run!"), FText::FromString(Ctx.ViewerName)));
-		}
-		return Spawned > 0;
+		return SpawnCreaturesDelayed(Ctx, BossCreaturePool,
+			Tr(TEXT("{0} is summoning a BOSS in {2} s!"), TEXT("{0} призывает БОССА через {2} с!")),
+			Tr(TEXT("The BOSS from {1} is here! Run!"), TEXT("БОСС от {1} уже здесь! Беги!")));
 	});
 
 	return Effects;
 }
 
-#undef LOCTEXT_NAMESPACE

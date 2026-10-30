@@ -7,8 +7,9 @@
 #include "FGCharacterPlayer.h"
 #include "EngineUtils.h"
 #include "GameFramework/GameStateBase.h"
+#include "ChatText.h"
 
-#define LOCTEXT_NAMESPACE "ChatControl"
+using ChatText::Tr;
 
 bool UChatControlSubsystem::ShouldCreateSubsystem(UObject* Outer) const
 {
@@ -21,6 +22,7 @@ void UChatControlSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	Super::Initialize(Collection);
 
 	Settings = FChatControlSettings::LoadOrCreate();
+	ChatText::SetLanguage(Settings.Language);
 	Economy.Load();
 	Effects = ChatEffects::CreateAll();
 
@@ -87,11 +89,40 @@ void UChatControlSubsystem::TickConfig(double Now)
 		return;
 	}
 	Settings.Save();
+	ChatText::SetLanguage(Settings.Language);
 	if (Settings.TwitchChannel != OldChannel || Settings.bEnabled != bWasEnabled)
 	{
 		RestartConnectors();
 	}
 	UE_LOG(LogChatControl, Log, TEXT("Settings changed in the mod config menu"));
+}
+
+void UChatControlSubsystem::RunDelayed(float Delay, TFunction<void()> Action)
+{
+	DelayedActions.Add({ FPlatformTime::Seconds() + Delay, MoveTemp(Action) });
+}
+
+void UChatControlSubsystem::TickDelayedActions(double Now)
+{
+	// Run due actions after removing them, so an action may safely schedule another one
+	TArray<TFunction<void()>> Due;
+	for (int32 i = DelayedActions.Num() - 1; i >= 0; --i)
+	{
+		if (Now >= DelayedActions[i].Key)
+		{
+			Due.Add(MoveTemp(DelayedActions[i].Value));
+			DelayedActions.RemoveAt(i);
+		}
+	}
+	for (int32 i = Due.Num() - 1; i >= 0; --i)
+	{
+		Due[i]();
+	}
+}
+
+UWorld* UChatControlSubsystem::GetGameWorld() const
+{
+	return GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr;
 }
 
 TStatId UChatControlSubsystem::GetStatId() const
@@ -117,6 +148,7 @@ void UChatControlSubsystem::Tick(float DeltaTime)
 	TickConfig(Now);
 	TickEconomy(Now);
 	TickTimedEffects(Now);
+	TickDelayedActions(Now);
 	TickChaosQueue(Now);
 	TickAutoChaos(Now);
 }
@@ -174,7 +206,7 @@ void UChatControlSubsystem::HandleEvent(const FChatEvent& Event)
 		Economy.OnViewerMessage(Key, Event.DisplayName, Now, Settings.FirstMessageBonus);
 		const int32 Chips = Event.Amount * Settings.ChipsPerBit;
 		Economy.AddChips(Key, Event.DisplayName, Chips);
-		Announce(FText::Format(LOCTEXT("BitsReceived", "{0} cheered {1} bits and got {2} chips!"), Name, FText::AsNumber(Event.Amount), FText::AsNumber(Chips)));
+		Announce(FText::Format(Tr(TEXT("{0} cheered {1} bits and got {2} chips!"), TEXT("{0} отправил(а) {1} бит и получил(а) {2} чипов!")), Name, FText::AsNumber(Event.Amount), FText::AsNumber(Chips)));
 		// A cheer message may also contain a command, now paid with the fresh chips
 		HandleCommand(Event);
 		break;
@@ -189,27 +221,27 @@ void UChatControlSubsystem::HandleEvent(const FChatEvent& Event)
 		}
 		else
 		{
-			Announce(FText::Format(LOCTEXT("UnknownReward", "Unknown channel points reward id {0}. Map it to an effect in Settings.json (RewardEffects)."), FText::FromString(Event.RewardId)));
+			Announce(FText::Format(Tr(TEXT("Unknown channel points reward id {0}. Map it to an effect in Settings.json (RewardEffects)."), TEXT("Неизвестная награда за баллы канала, ID {0}. Привяжи её к эффекту в Settings.json (RewardEffects).")), FText::FromString(Event.RewardId)));
 		}
 		break;
 	}
 
 	case EChatEventType::Subscription:
 		Economy.AddChips(Key, Event.DisplayName, Settings.ChipsPerSub);
-		Announce(FText::Format(LOCTEXT("Sub", "{0} subscribed and got {1} chips! Thank you!"), Name, FText::AsNumber(Settings.ChipsPerSub)));
+		Announce(FText::Format(Tr(TEXT("{0} subscribed and got {1} chips! Thank you!"), TEXT("{0} подписался(ась) и получил(а) {1} чипов! Спасибо!")), Name, FText::AsNumber(Settings.ChipsPerSub)));
 		break;
 
 	case EChatEventType::GiftSubs:
 	{
 		const int32 Chips = Settings.ChipsPerSub * Event.Amount;
 		Economy.AddChips(Key, Event.DisplayName, Chips);
-		Announce(FText::Format(LOCTEXT("GiftSubs", "{0} gifted {1} subs and got {2} chips!"), Name, FText::AsNumber(Event.Amount), FText::AsNumber(Chips)));
+		Announce(FText::Format(Tr(TEXT("{0} gifted {1} subs and got {2} chips!"), TEXT("{0} подарил(а) {1} подписок и получил(а) {2} чипов!")), Name, FText::AsNumber(Event.Amount), FText::AsNumber(Chips)));
 		break;
 	}
 
 	case EChatEventType::Raid:
 	{
-		Announce(FText::Format(LOCTEXT("Raid", "{0} is raiding with {1} viewers! Brace yourself!"), Name, FText::AsNumber(Event.Amount)));
+		Announce(FText::Format(Tr(TEXT("{0} is raiding with {1} viewers! Brace yourself!"), TEXT("{0} врывается с рейдом на {1} зрителей! Держись!")), Name, FText::AsNumber(Event.Amount)));
 		auto IsEnabled = [this](const TCHAR* EffectId)
 		{
 			const FChatEffectSettings* EffectSettings = Settings.Effects.Find(EffectId);
@@ -217,7 +249,7 @@ void UChatControlSubsystem::HandleEvent(const FChatEvent& Event)
 		};
 
 		// One ambush per 5 raiders (max 5), plus a boss for big raids
-		const int32 Waves = FMath::Clamp(Event.Amount / 5, 1, 5);
+		const int32 Waves = FMath::Clamp(Event.Amount / FMath::Max(1, Settings.RaidViewersPerAmbush), 1, FMath::Max(1, Settings.RaidMaxAmbushes));
 		if (IsEnabled(TEXT("ambush")))
 		{
 			for (int32 i = 0; i < Waves; ++i)
@@ -225,7 +257,7 @@ void UChatControlSubsystem::HandleEvent(const FChatEvent& Event)
 				ChaosQueue.Add({ TEXT("ambush"), Key, Event.DisplayName, 0 });
 			}
 		}
-		if (Event.Amount >= 30 && IsEnabled(TEXT("boss")))
+		if (Settings.RaidBossMinViewers > 0 && Event.Amount >= Settings.RaidBossMinViewers && IsEnabled(TEXT("boss")))
 		{
 			ChaosQueue.Add({ TEXT("boss"), Key, Event.DisplayName, 0 });
 		}
@@ -262,7 +294,7 @@ void UChatControlSubsystem::HandleCommand(const FChatEvent& Event)
 	if (Command == TEXT("chips") || Command == TEXT("чипы"))
 	{
 		const FChatViewerRecord* Record = Economy.Find(Key);
-		Announce(FText::Format(LOCTEXT("Balance", "{0} has {1} chips"), Name, FText::AsNumber(Record ? Record->Chips : 0)));
+		Announce(FText::Format(Tr(TEXT("{0} has {1} chips"), TEXT("У {0} {1} чипов")), Name, FText::AsNumber(Record ? Record->Chips : 0)));
 		return;
 	}
 
@@ -278,7 +310,7 @@ void UChatControlSubsystem::HandleCommand(const FChatEvent& Event)
 				Parts.Add(Cost > 0 ? FString::Printf(TEXT("!%s (%d)"), *Pair.Key, Cost) : FString::Printf(TEXT("!%s"), *Pair.Key));
 			}
 		}
-		Announce(FText::Format(LOCTEXT("EffectList", "Commands: {0}"), FText::FromString(FString::Join(Parts, TEXT(", ")))));
+		Announce(FText::Format(Tr(TEXT("Commands: {0}"), TEXT("Команды: {0}")), FText::FromString(FString::Join(Parts, TEXT(", ")))));
 		return;
 	}
 
@@ -288,8 +320,8 @@ void UChatControlSubsystem::HandleCommand(const FChatEvent& Event)
 	{
 		bChaosPaused = !bChaosPaused;
 		Announce(bChaosPaused
-			? LOCTEXT("Paused", "Chaos paused. Harmful effects will wait in the queue.")
-			: LOCTEXT("Resumed", "Chaos resumed!"));
+			? Tr(TEXT("Chaos paused. Harmful effects will wait in the queue."), TEXT("Хаос на паузе. Вредные эффекты ждут в очереди."))
+			: Tr(TEXT("Chaos resumed!"), TEXT("Хаос снова в деле!")));
 		return;
 	}
 
@@ -321,7 +353,7 @@ void UChatControlSubsystem::HandleTestCommand(const FChatEvent& Event, const FSt
 	{
 		const int32 Chips = Amount > 0 ? Amount : 1000;
 		Economy.AddChips(Event.GetEconomyKey(), Event.DisplayName, Chips);
-		Announce(FText::Format(LOCTEXT("TestChips", "[test] {0} got {1} chips"), FText::FromString(Event.DisplayName), FText::AsNumber(Chips)));
+		Announce(FText::Format(Tr(TEXT("[test] {0} got {1} chips"), TEXT("[тест] {0} получает {1} чипов")), FText::FromString(Event.DisplayName), FText::AsNumber(Chips)));
 	}
 	else if (What == TEXT("bits"))
 	{
@@ -357,7 +389,7 @@ void UChatControlSubsystem::HandleTestCommand(const FChatEvent& Event, const FSt
 	}
 	else
 	{
-		Announce(LOCTEXT("TestHelp", "[test] chips [N], bits [N], sub, gifts [N], raid [N], autochaos, or an effect name"));
+		Announce(Tr(TEXT("[test] chips [N], bits [N], sub, gifts [N], raid [N], autochaos, or an effect name"), TEXT("[тест] chips [N], bits [N], sub, gifts [N], raid [N], autochaos или название эффекта")));
 	}
 }
 
@@ -390,7 +422,7 @@ void UChatControlSubsystem::RequestEffect(const FString& EffectId, const FString
 	if (Cost > 0 && !Economy.TrySpend(ViewerKey, Cost))
 	{
 		const FChatViewerRecord* Record = Economy.Find(ViewerKey);
-		Announce(FText::Format(LOCTEXT("NotEnoughChips", "{0} needs {1} chips for !{2} (has {3})"),
+		Announce(FText::Format(Tr(TEXT("{0} needs {1} chips for !{2} (has {3})"), TEXT("{0}: для !{2} нужно {1} чипов (есть {3})")),
 			FText::FromString(ViewerName), FText::AsNumber(Cost), FText::FromString(EffectId), FText::AsNumber(Record ? Record->Chips : 0)));
 		return;
 	}
@@ -414,7 +446,7 @@ void UChatControlSubsystem::RequestEffect(const FString& EffectId, const FString
 bool UChatControlSubsystem::ExecuteEffect(const FChatEffect& Effect, const FString& ViewerName)
 {
 	FChatEffectContext Ctx;
-	Ctx.World = GetGameInstance()->GetWorld();
+	Ctx.World = GetGameWorld();
 	Ctx.Player = FindPlayer();
 	Ctx.Subsystem = this;
 	Ctx.Settings = Settings.Effects.Find(Effect.Id);
@@ -435,7 +467,7 @@ void UChatControlSubsystem::TickEconomy(double Now)
 		const int32 Paid = Economy.PayActiveViewers(Now, Settings.ActiveWindowSeconds, Settings.ChipsPerInterval);
 		if (Paid > 0)
 		{
-			Announce(FText::Format(LOCTEXT("Payout", "{0} active viewers received {1} chips"), FText::AsNumber(Paid), FText::AsNumber(Settings.ChipsPerInterval)));
+			Announce(FText::Format(Tr(TEXT("{0} active viewers received {1} chips"), TEXT("Активные зрители ({0}) получили по {1} чипов")), FText::AsNumber(Paid), FText::AsNumber(Settings.ChipsPerInterval)));
 		}
 	}
 	if (Now >= NextEconomySave)
@@ -495,7 +527,7 @@ void UChatControlSubsystem::TickAutoChaos(double Now)
 	}
 	if (Candidates.Num() > 0)
 	{
-		Announce(LOCTEXT("AutoChaos", "Chat is quiet... ADA decided to have some fun."));
+		Announce(Tr(TEXT("Chat is quiet... ADA decided to have some fun."), TEXT("В чате тишина... ADA решила развлечься.")));
 		RequestEffect(Candidates[FMath::RandRange(0, Candidates.Num() - 1)], TEXT("system:ada"), TEXT("ADA"), true);
 	}
 }
@@ -562,4 +594,3 @@ AFGCharacterPlayer* UChatControlSubsystem::FindPlayer() const
 	return Fallback;
 }
 
-#undef LOCTEXT_NAMESPACE

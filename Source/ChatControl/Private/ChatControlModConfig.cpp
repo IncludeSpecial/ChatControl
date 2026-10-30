@@ -8,18 +8,13 @@
 #include "Configuration/Properties/ConfigPropertyFloat.h"
 #include "Configuration/Properties/ConfigPropertyString.h"
 #include "Configuration/Properties/WidgetExtension/CP_Section.h"
-#include "Internationalization/Culture.h"
+#include "ChatText.h"
+
+using ChatText::Tr;
 
 namespace
 {
 	const TCHAR* WidgetPath = TEXT("/SML/Interface/UI/Menu/Mods/ConfigProperties/");
-
-	/** Minimal two-language text until the mod gets a proper localization target */
-	FText Tr(const TCHAR* English, const TCHAR* Russian)
-	{
-		const bool bRussian = FInternationalization::Get().GetCurrentLanguage()->GetTwoLetterISOLanguageName() == TEXT("ru");
-		return FText::FromString(bRussian ? Russian : English);
-	}
 
 	/** SML's C++ property classes have no widgets; the BP_ConfigProperty* subclasses provide them */
 	template <typename TProperty>
@@ -155,6 +150,13 @@ void UChatControlModConfig::Register(UConfigManager* ConfigManager, const FChatC
 	AddString(General, TEXT("TwitchChannel"), Defaults.TwitchChannel,
 		Tr(TEXT("Twitch channel"), TEXT("Канал Twitch")),
 		Tr(TEXT("Channel name from the URL, e.g. swittyids"), TEXT("Имя канала из ссылки, например swittyids")));
+	AddString(General, TEXT("Language"), Defaults.Language,
+		Tr(TEXT("Language"), TEXT("Язык")),
+		Tr(TEXT("auto = same as the game, en = English, ru = Russian. The settings page switches after restart."),
+		   TEXT("auto = как в игре, en = английский, ru = русский. Страница настроек переключится после перезапуска.")));
+	AddString(General, TEXT("IgnoredUsers"), FString::Join(Defaults.IgnoredUsers, TEXT(", ")),
+		Tr(TEXT("Ignored users"), TEXT("Игнорируемые пользователи")),
+		Tr(TEXT("Comma-separated chat logins, e.g. bots"), TEXT("Логины через запятую, например боты")));
 	AddInt(General, TEXT("ChaosBudgetPerMinute"), Defaults.ChaosBudgetPerMinute,
 		Tr(TEXT("Chaos budget per minute"), TEXT("Бюджет хаоса в минуту")),
 		Tr(TEXT("How many chaos points harmful effects may use per minute. Extra effects wait in a queue."),
@@ -172,6 +174,26 @@ void UChatControlModConfig::Register(UConfigManager* ConfigManager, const FChatC
 	AddInt(AutoChaos, TEXT("IdleMinutes"), FMath::RoundToInt(Defaults.AutoChaosIdleSeconds / 60.f),
 		Tr(TEXT("Quiet time (min)"), TEXT("Время тишины (мин)")),
 		Tr(TEXT("Minutes without effects before ADA steps in"), TEXT("Сколько минут без эффектов до вмешательства ADA")));
+
+	// --- Creatures ---
+	UConfigPropertySection* Creatures = AddSection(Root, TEXT("Creatures"), Tr(TEXT("Creatures"), TEXT("Существа")));
+	AddFloat(Creatures, TEXT("SpawnDistanceMin"), Defaults.SpawnDistanceMin,
+		Tr(TEXT("Min spawn distance (m)"), TEXT("Мин. расстояние спавна (м)")));
+	AddFloat(Creatures, TEXT("SpawnDistanceMax"), Defaults.SpawnDistanceMax,
+		Tr(TEXT("Max spawn distance (m)"), TEXT("Макс. расстояние спавна (м)")));
+	AddInt(Creatures, TEXT("LifeSpan"), FMath::RoundToInt(Defaults.CreatureLifeSpanSeconds),
+		Tr(TEXT("Despawn after (s)"), TEXT("Исчезают через (с)")),
+		Tr(TEXT("Creatures from chat disappear after this time"), TEXT("Существа от чата исчезают через это время")));
+
+	// --- Raids ---
+	UConfigPropertySection* Raids = AddSection(Root, TEXT("Raids"), Tr(TEXT("Raids"), TEXT("Рейды")));
+	AddInt(Raids, TEXT("ViewersPerAmbush"), Defaults.RaidViewersPerAmbush,
+		Tr(TEXT("Raiders per ambush"), TEXT("Зрителей рейда на 1 засаду")));
+	AddInt(Raids, TEXT("MaxAmbushes"), Defaults.RaidMaxAmbushes,
+		Tr(TEXT("Max ambushes"), TEXT("Макс. засад")));
+	AddInt(Raids, TEXT("BossMinViewers"), Defaults.RaidBossMinViewers,
+		Tr(TEXT("Boss from raid size"), TEXT("Босс от размера рейда")),
+		Tr(TEXT("0 = never"), TEXT("0 = никогда")));
 
 	// --- Economy ---
 	UConfigPropertySection* Economy = AddSection(Root, TEXT("Economy"), Tr(TEXT("FICSIT Chips"), TEXT("Чипы FICSIT")));
@@ -218,6 +240,29 @@ void UChatControlModConfig::Register(UConfigManager* ConfigManager, const FChatC
 			AddInt(Section, TEXT("Amount"), Effect->Amount,
 				Tr(TEXT("Creatures"), TEXT("Количество существ")));
 		}
+		if (Effect->Strength > 0.f)
+		{
+			AddFloat(Section, TEXT("Strength"), Effect->Strength,
+				Tr(TEXT("Strength"), TEXT("Сила")),
+				Tr(TEXT("Jump/gravity multiplier, or share of a stack for gifts (0.5 = half)"),
+				   TEXT("Множитель прыжка/гравитации или доля стака для подарков (0.5 = половина)")));
+		}
+		if (Effect->DelayMax > 0.f || Effect->Amount > 0)
+		{
+			AddFloat(Section, TEXT("DelayMin"), Effect->DelayMin,
+				Tr(TEXT("Warning delay min (s)"), TEXT("Задержка мин. (с)")),
+				Tr(TEXT("Time between the warning and the spawn"), TEXT("Время между предупреждением и появлением")));
+			AddFloat(Section, TEXT("DelayMax"), Effect->DelayMax,
+				Tr(TEXT("Warning delay max (s)"), TEXT("Задержка макс. (с)")));
+		}
+		AddInt(Section, TEXT("GlobalCooldown"), FMath::RoundToInt(Effect->GlobalCooldown),
+			Tr(TEXT("Global cooldown (s)"), TEXT("Общий кулдаун (с)")));
+		if (Effect->ChaosWeight > 0)
+		{
+			AddInt(Section, TEXT("ChaosWeight"), Effect->ChaosWeight,
+				Tr(TEXT("Chaos points"), TEXT("Очки хаоса")),
+				Tr(TEXT("How much of the per-minute chaos budget it uses"), TEXT("Сколько бюджета хаоса в минуту тратит")));
+		}
 	}
 
 	ConfigManager->RegisterModConfiguration(StaticClass());
@@ -236,6 +281,38 @@ bool UChatControlModConfig::ApplyTo(UConfigManager* ConfigManager, FChatControlS
 	bChanged |= Read<UConfigPropertyBool>(General, TEXT("Enabled"), Settings.bEnabled);
 	bChanged |= Read<UConfigPropertyString>(General, TEXT("TwitchChannel"), Settings.TwitchChannel);
 	bChanged |= Read<UConfigPropertyInteger>(General, TEXT("ChaosBudgetPerMinute"), Settings.ChaosBudgetPerMinute);
+	bChanged |= Read<UConfigPropertyString>(General, TEXT("Language"), Settings.Language);
+	FString Ignored = FString::Join(Settings.IgnoredUsers, TEXT(", "));
+	if (Read<UConfigPropertyString>(General, TEXT("IgnoredUsers"), Ignored))
+	{
+		TArray<FString> Parts;
+		Ignored.ParseIntoArray(Parts, TEXT(","));
+		Settings.IgnoredUsers.Reset();
+		for (const FString& Part : Parts)
+		{
+			const FString Login = Part.TrimStartAndEnd().ToLower();
+			if (!Login.IsEmpty())
+			{
+				Settings.IgnoredUsers.Add(Login);
+			}
+		}
+		bChanged = true;
+	}
+
+	const UConfigPropertySection* Creatures = GetSection(Root, TEXT("Creatures"));
+	bChanged |= Read<UConfigPropertyFloat>(Creatures, TEXT("SpawnDistanceMin"), Settings.SpawnDistanceMin);
+	bChanged |= Read<UConfigPropertyFloat>(Creatures, TEXT("SpawnDistanceMax"), Settings.SpawnDistanceMax);
+	int32 LifeSpan = FMath::RoundToInt(Settings.CreatureLifeSpanSeconds);
+	if (Read<UConfigPropertyInteger>(Creatures, TEXT("LifeSpan"), LifeSpan))
+	{
+		Settings.CreatureLifeSpanSeconds = LifeSpan;
+		bChanged = true;
+	}
+
+	const UConfigPropertySection* Raids = GetSection(Root, TEXT("Raids"));
+	bChanged |= Read<UConfigPropertyInteger>(Raids, TEXT("ViewersPerAmbush"), Settings.RaidViewersPerAmbush);
+	bChanged |= Read<UConfigPropertyInteger>(Raids, TEXT("MaxAmbushes"), Settings.RaidMaxAmbushes);
+	bChanged |= Read<UConfigPropertyInteger>(Raids, TEXT("BossMinViewers"), Settings.RaidBossMinViewers);
 	int32 DeathProtection = FMath::RoundToInt(Settings.DeathProtectionSeconds);
 	if (Read<UConfigPropertyInteger>(General, TEXT("DeathProtectionSeconds"), DeathProtection))
 	{
@@ -295,6 +372,16 @@ bool UChatControlModConfig::ApplyTo(UConfigManager* ConfigManager, FChatControlS
 			bChanged = true;
 		}
 		bChanged |= Read<UConfigPropertyInteger>(Section, TEXT("Amount"), Effect.Amount);
+		bChanged |= Read<UConfigPropertyFloat>(Section, TEXT("Strength"), Effect.Strength);
+		bChanged |= Read<UConfigPropertyFloat>(Section, TEXT("DelayMin"), Effect.DelayMin);
+		bChanged |= Read<UConfigPropertyFloat>(Section, TEXT("DelayMax"), Effect.DelayMax);
+		bChanged |= Read<UConfigPropertyInteger>(Section, TEXT("ChaosWeight"), Effect.ChaosWeight);
+		int32 GlobalCooldown = FMath::RoundToInt(Effect.GlobalCooldown);
+		if (Read<UConfigPropertyInteger>(Section, TEXT("GlobalCooldown"), GlobalCooldown))
+		{
+			Effect.GlobalCooldown = GlobalCooldown;
+			bChanged = true;
+		}
 	}
 
 	return bChanged;

@@ -1,4 +1,4 @@
-# ChatControl
+﻿# ChatControl
 
 Satisfactory mod that lets your Twitch chat play with you.
 
@@ -23,7 +23,7 @@ No Twitch token needed: chat is read anonymously.
 | `!test <effect>` | streamer | run an effect for free |
 | `!test chips/bits/sub/gifts/raid [N]`, `!test autochaos` | streamer | simulate events for testing |
 
-Raids spawn one ambush per 5 raiders (up to 5) and a boss for raids of 30+. Spawned creatures despawn after 5 minutes.
+Creatures arrive 3-5 s after a warning. Raids spawn one ambush per 5 raiders (up to 5) and a boss for raids of 30+. Spawned creatures despawn after 5 minutes. Everything above, including spawn distance, delays, effect strength, raid rules and language, is configurable in Mods -> ChatControl.
 
 Prices grow with the number of active viewers.
 
@@ -35,12 +35,12 @@ Prices grow with the number of active viewers.
 
 # ChatControl (RU)
 
-Мод для Satisfactory: твой чат на Twitch играет вместе с тобой.
+РњРѕРґ РґР»СЏ Satisfactory: С‚РІРѕР№ С‡Р°С‚ РЅР° Twitch РёРіСЂР°РµС‚ РІРјРµСЃС‚Рµ СЃ С‚РѕР±РѕР№.
 
-- **Чипы FICSIT** зрители получают за активность в чате и тратят на эффекты. Баланс сохраняется между стримами.
-- **Биты, сабы и гифт-сабы** превращаются в чипы, **рейд** запускает волну хаоса.
-- **Баллы канала**: награды с вводом текста привязываются к эффектам в `Settings.json`.
-- **Автохаос**: когда чат молчит, ADA сама запускает случайный эффект.
-- **Защита**: бюджет хаоса, кулдауны, защита после смерти, `!pause` для стримера и модераторов.
+- **Р§РёРїС‹ FICSIT** Р·СЂРёС‚РµР»Рё РїРѕР»СѓС‡Р°СЋС‚ Р·Р° Р°РєС‚РёРІРЅРѕСЃС‚СЊ РІ С‡Р°С‚Рµ Рё С‚СЂР°С‚СЏС‚ РЅР° СЌС„С„РµРєС‚С‹. Р‘Р°Р»Р°РЅСЃ СЃРѕС…СЂР°РЅСЏРµС‚СЃСЏ РјРµР¶РґСѓ СЃС‚СЂРёРјР°РјРё.
+- **Р‘РёС‚С‹, СЃР°Р±С‹ Рё РіРёС„С‚-СЃР°Р±С‹** РїСЂРµРІСЂР°С‰Р°СЋС‚СЃСЏ РІ С‡РёРїС‹, **СЂРµР№Рґ** Р·Р°РїСѓСЃРєР°РµС‚ РІРѕР»РЅСѓ С…Р°РѕСЃР°.
+- **Р‘Р°Р»Р»С‹ РєР°РЅР°Р»Р°**: РЅР°РіСЂР°РґС‹ СЃ РІРІРѕРґРѕРј С‚РµРєСЃС‚Р° РїСЂРёРІСЏР·С‹РІР°СЋС‚СЃСЏ Рє СЌС„С„РµРєС‚Р°Рј РІ `Settings.json`.
+- **РђРІС‚РѕС…Р°РѕСЃ**: РєРѕРіРґР° С‡Р°С‚ РјРѕР»С‡РёС‚, ADA СЃР°РјР° Р·Р°РїСѓСЃРєР°РµС‚ СЃР»СѓС‡Р°Р№РЅС‹Р№ СЌС„С„РµРєС‚.
+- **Р—Р°С‰РёС‚Р°**: Р±СЋРґР¶РµС‚ С…Р°РѕСЃР°, РєСѓР»РґР°СѓРЅС‹, Р·Р°С‰РёС‚Р° РїРѕСЃР»Рµ СЃРјРµСЂС‚Рё, `!pause` РґР»СЏ СЃС‚СЂРёРјРµСЂР° Рё РјРѕРґРµСЂР°С‚РѕСЂРѕРІ.
 
-Токен Twitch не нужен.
+РўРѕРєРµРЅ Twitch РЅРµ РЅСѓР¶РµРЅ.

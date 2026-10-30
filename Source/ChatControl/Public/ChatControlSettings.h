@@ -21,23 +21,47 @@ struct FChatEffectSettings
 	UPROPERTY() int32 ChaosWeight = 1;
 	/** How many things the effect spawns (creatures). 0 = not applicable */
 	UPROPERTY() int32 Amount = 0;
+	/** Effect-specific power: jump/gravity multiplier, share of a stack for gifts. 0 = not applicable */
+	UPROPERTY() float Strength = 0.f;
+	/** Random warning delay before the effect hits, seconds (creatures) */
+	UPROPERTY() float DelayMin = 0.f;
+	UPROPERTY() float DelayMax = 0.f;
 };
 
 /**
  * Stored as JSON in Saved/ChatControl/Settings.json.
- * Will get an in-game ModConfig UI later; the file stays the source of truth for advanced options.
+ * The in-game settings page (Mods -> ChatControl) edits the same values.
  */
 USTRUCT()
 struct FChatControlSettings
 {
 	GENERATED_BODY()
 
+	/** Bumped when new per-effect fields appear, so older files get their defaults filled in */
+	UPROPERTY() int32 SettingsVersion = 0;
+
 	UPROPERTY() bool bEnabled = true;
+	/** Language of game chat messages and the settings page: "auto" (follows the game), "en" or "ru" */
+	UPROPERTY() FString Language = TEXT("auto");
 
 	// --- Twitch ---
 	UPROPERTY() FString TwitchChannel = TEXT("swittyids");
 	/** Chat logins to ignore (bots) */
 	UPROPERTY() TArray<FString> IgnoredUsers = { TEXT("nightbot"), TEXT("streamelements"), TEXT("streamlabs"), TEXT("moobot"), TEXT("fossabot") };
+
+	// --- Creatures ---
+	/** Spawned creatures despawn after this long, so chat can't flood the world with enemies */
+	UPROPERTY() float CreatureLifeSpanSeconds = 300.f;
+	/** Creatures appear on a ring around the player, in meters */
+	UPROPERTY() float SpawnDistanceMin = 6.f;
+	UPROPERTY() float SpawnDistanceMax = 10.f;
+
+	// --- Raids ---
+	/** One ambush per this many raiders */
+	UPROPERTY() int32 RaidViewersPerAmbush = 5;
+	UPROPERTY() int32 RaidMaxAmbushes = 5;
+	/** Raids with at least this many viewers also bring a boss. 0 = never */
+	UPROPERTY() int32 RaidBossMinViewers = 30;
 
 	// --- FICSIT Chips economy ---
 	UPROPERTY() int32 ChipsPerInterval = 10;
@@ -67,8 +91,10 @@ struct FChatControlSettings
 	/** Effect id -> settings */
 	UPROPERTY() TMap<FString, FChatEffectSettings> Effects;
 
-	/** Fills Effects with defaults for any effect id that is missing */
+	/** Fills Effects with defaults for any effect id that is missing, and new fields of older files */
 	void AddMissingEffectDefaults();
+
+	static constexpr int32 CurrentVersion = 2;
 
 	static FString GetSettingsPath();
 	static FChatControlSettings LoadOrCreate();
