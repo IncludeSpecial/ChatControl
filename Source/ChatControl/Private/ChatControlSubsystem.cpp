@@ -141,14 +141,14 @@ void UChatControlSubsystem::Announce(const FText& Message) const
 	}
 }
 
-void UChatControlSubsystem::StartTimedEffect(const FString& Slot, float Duration, TFunction<void()> Apply, TFunction<void()> Revert)
+void UChatControlSubsystem::StartTimedEffect(const FString& Slot, float Duration, TFunction<void()> Maintain, TFunction<void()> Revert)
 {
 	if (FTimedEffect* Active = TimedEffects.Find(Slot))
 	{
 		Active->Revert();
 	}
-	Apply();
-	TimedEffects.Add(Slot, FTimedEffect{ FPlatformTime::Seconds() + Duration, MoveTemp(Revert) });
+	Maintain();
+	TimedEffects.Add(Slot, FTimedEffect{ FPlatformTime::Seconds() + Duration, MoveTemp(Maintain), MoveTemp(Revert) });
 }
 
 void UChatControlSubsystem::HandleEvent(const FChatEvent& Event)
@@ -290,16 +290,69 @@ void UChatControlSubsystem::HandleCommand(const FChatEvent& Event)
 
 	if (Command == TEXT("test") && Event.bIsBroadcaster)
 	{
-		if (const FChatEffect* Effect = Effects.Find(Args))
-		{
-			ExecuteEffect(*Effect, Event.DisplayName);
-		}
+		HandleTestCommand(Event, Args);
 		return;
 	}
 
 	if (Effects.Contains(Command))
 	{
 		RequestEffect(Command, Key, Event.DisplayName, false);
+	}
+}
+
+void UChatControlSubsystem::HandleTestCommand(const FChatEvent& Event, const FString& Args)
+{
+	FString What, AmountText;
+	if (!Args.Split(TEXT(" "), &What, &AmountText))
+	{
+		What = Args;
+	}
+	const int32 Amount = FCString::Atoi(*AmountText);
+
+	// Simulated events go through the normal handler, so the whole pipeline is tested
+	FChatEvent Fake = Event;
+	Fake.Text.Empty();
+	if (What == TEXT("chips"))
+	{
+		const int32 Chips = Amount > 0 ? Amount : 1000;
+		Economy.AddChips(Event.GetEconomyKey(), Event.DisplayName, Chips);
+		Announce(FText::Format(LOCTEXT("TestChips", "[test] {0} got {1} chips"), FText::FromString(Event.DisplayName), FText::AsNumber(Chips)));
+	}
+	else if (What == TEXT("bits"))
+	{
+		Fake.Type = EChatEventType::Bits;
+		Fake.Amount = Amount > 0 ? Amount : 100;
+		HandleEvent(Fake);
+	}
+	else if (What == TEXT("sub"))
+	{
+		Fake.Type = EChatEventType::Subscription;
+		Fake.Amount = 1;
+		HandleEvent(Fake);
+	}
+	else if (What == TEXT("gifts"))
+	{
+		Fake.Type = EChatEventType::GiftSubs;
+		Fake.Amount = Amount > 0 ? Amount : 5;
+		HandleEvent(Fake);
+	}
+	else if (What == TEXT("raid"))
+	{
+		Fake.Type = EChatEventType::Raid;
+		Fake.Amount = Amount > 0 ? Amount : 10;
+		HandleEvent(Fake);
+	}
+	else if (What == TEXT("autochaos"))
+	{
+		LastTriggerTime = -Settings.AutoChaosIdleSeconds;
+	}
+	else if (const FChatEffect* Effect = Effects.Find(What))
+	{
+		ExecuteEffect(*Effect, Event.DisplayName);
+	}
+	else
+	{
+		Announce(LOCTEXT("TestHelp", "[test] chips [N], bits [N], sub, gifts [N], raid [N], autochaos, or an effect name"));
 	}
 }
 
@@ -450,6 +503,10 @@ void UChatControlSubsystem::TickTimedEffects(double Now)
 		{
 			It.Value().Revert();
 			It.RemoveCurrent();
+		}
+		else
+		{
+			It.Value().Maintain();
 		}
 	}
 }

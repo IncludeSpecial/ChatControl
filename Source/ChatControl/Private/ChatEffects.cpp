@@ -58,34 +58,57 @@ namespace
 		return true;
 	}
 
-	UCharacterMovementComponent* GetMovement(const FChatEffectContext& Ctx)
+	/** State of one scaled movement property, shared between the maintain and revert callbacks */
+	struct FScaledMovement
 	{
-		return Ctx.Player ? Ctx.Player->GetCharacterMovement() : nullptr;
-	}
+		TWeakObjectPtr<UCharacterMovementComponent> Movement;
+		float Original = 0.f;
+	};
 
-	/** Multiplies a movement property for the effect duration. Effects sharing a slot replace each other instead of stacking. */
+	/**
+	 * Multiplies a movement property for the effect duration. The value is re-applied every tick because the game
+	 * resets movement properties on its own (respawn, movement mode changes). Effects sharing a slot replace each other.
+	 */
 	bool ScaleMovementTemporarily(const FChatEffectContext& Ctx, const FString& Slot, float UCharacterMovementComponent::* Property, float Multiplier, const FText& Message)
 	{
-		UCharacterMovementComponent* Movement = GetMovement(Ctx);
-		if (!Movement)
+		if (!Ctx.Player || !Ctx.Player->GetCharacterMovement())
 		{
 			return false;
 		}
-		TWeakObjectPtr<UCharacterMovementComponent> WeakMovement = Movement;
-		// Read the original value when applying: the previous effect in this slot is reverted first
-		TSharedRef<float> Original = MakeShared<float>(0.f);
-		Ctx.Subsystem->StartTimedEffect(Slot, Ctx.Settings->Duration,
-			[WeakMovement, Property, Original, Multiplier]
+		UChatControlSubsystem* Subsystem = Ctx.Subsystem;
+		TSharedRef<FScaledMovement> State = MakeShared<FScaledMovement>();
+		Subsystem->StartTimedEffect(Slot, Ctx.Settings->Duration,
+			[Subsystem, State, Property, Multiplier, Slot]
 			{
-				if (WeakMovement.IsValid())
+				const AFGCharacterPlayer* Player = Subsystem->FindPlayer();
+				UCharacterMovementComponent* Movement = Player ? Player->GetCharacterMovement() : nullptr;
+				if (!Movement)
 				{
-					*Original = WeakMovement.Get()->*Property;
-					WeakMovement.Get()->*Property = *Original * Multiplier;
+					return;
+				}
+				if (State->Movement != Movement)
+				{
+					// First tick, or the player respawned with a new movement component
+					if (State->Movement.IsValid())
+					{
+						State->Movement.Get()->*Property = State->Original;
+					}
+					State->Movement = Movement;
+					State->Original = Movement->*Property;
+					UE_LOG(LogChatControl, Log, TEXT("%s: %.2f -> %.2f"), *Slot, State->Original, State->Original * Multiplier);
+				}
+				const float Target = State->Original * Multiplier;
+				if (!FMath::IsNearlyEqual(Movement->*Property, Target))
+				{
+					Movement->*Property = Target;
 				}
 			},
-			[WeakMovement, Property, Original]
+			[State, Property]
 			{
-				if (WeakMovement.IsValid()) { WeakMovement.Get()->*Property = *Original; }
+				if (State->Movement.IsValid())
+				{
+					State->Movement.Get()->*Property = State->Original;
+				}
 			});
 		Ctx.Subsystem->Announce(Message);
 		return true;

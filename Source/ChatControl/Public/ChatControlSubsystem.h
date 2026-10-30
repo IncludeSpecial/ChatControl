@@ -39,10 +39,13 @@ public:
 	void Announce(const FText& Message) const;
 
 	/**
-	 * Runs Apply now and Revert after Duration seconds.
+	 * Runs Maintain now and every tick for Duration seconds, then Revert.
 	 * If an effect in the same slot is active, it is reverted first, so effects never stack.
 	 */
-	void StartTimedEffect(const FString& Slot, float Duration, TFunction<void()> Apply, TFunction<void()> Revert);
+	void StartTimedEffect(const FString& Slot, float Duration, TFunction<void()> Maintain, TFunction<void()> Revert);
+
+	/** The local player character, or null in menus and loading screens */
+	AFGCharacterPlayer* FindPlayer() const;
 
 private:
 	struct FPendingChaos
@@ -56,6 +59,7 @@ private:
 	struct FTimedEffect
 	{
 		double EndTime = 0.0;
+		TFunction<void()> Maintain;
 		TFunction<void()> Revert;
 	};
 
@@ -77,7 +81,8 @@ private:
 
 	int32 GetScaledCost(int32 BaseCost, double Now) const;
 	int32 GetChaosBudgetUsed(double Now) const;
-	AFGCharacterPlayer* FindPlayer() const;
+	/** "!test <what> [amount]" from the streamer: simulates paid events without spending anything */
+	void HandleTestCommand(const FChatEvent& Event, const FString& Args);
 
 	FChatControlSettings Settings;
 	FChatEconomy Economy;
