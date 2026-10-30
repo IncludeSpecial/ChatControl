@@ -1,49 +1,54 @@
 # ChatControl
 
-Satisfactory mod that lets your Twitch chat play with you.
+Satisfactory mod that lets your Twitch and YouTube chat play with you.
 
-- **FICSIT Chips**: viewers earn chips just by being active in chat and spend them on effects. Balances persist between streams.
-- **Bits, subs, gift subs** turn into chips; **raids** unleash a wave of chaos.
+- **FICSIT Chips**: viewers earn chips by being active in chat and spend them on effects. Balances persist between streams.
+- **Bits, subs, gift subs, Super Chats, memberships** turn into chips; **raids** bring ambushes and a boss.
 - **Channel points**: rewards with text input are mapped to effects in `Settings.json`.
+- **Votes, shared pot, leaderboard** keep a small chat involved.
 - **Auto-Chaos**: when chat is quiet, ADA triggers a random effect, so the mod is fun on small streams and even offline.
-- **Safety**: chaos budget per minute, cooldowns, death protection, `!pause` for the streamer and moderators.
+- **Safety**: chaos budget, cooldowns, death protection, safe zone around the HUB, `!pause` and `!panic`.
+- **OBS widgets**: the mod serves live data at `http://localhost:8787/state`.
 
-No Twitch token needed: chat is read anonymously.
+Twitch needs no token (chat is read anonymously). YouTube needs a free YouTube Data API v3 key.
 
 ## Chat commands
 
 | Command | Who | What |
 |---|---|---|
-| `!chips` | everyone | show your balance |
-| `!effects` | everyone | list effects and current prices |
-| `!hi`, `!gift` | everyone | free effects with cooldowns |
-| `!biggift`, `!jump`, `!moon`, `!heavy` | everyone | paid with chips |
-| `!ambush`, `!boss` | everyone | spawn enemies around the streamer, paid with chips |
-| `!speed`, `!slow`, `!fov`, `!teleport`, `!hub` | everyone | player chaos, paid with chips |
-| `!strike` | everyone | random machines stop working for a while, paid with chips |
-| `!pause` | streamer, mods | pause/resume harmful effects |
-| `!panic` | streamer, mods | cancel all chaos and remove creatures from chat |
+| `!chips` | everyone | your balance |
+| `!effects` | everyone | effects and current prices |
+| `!hi`, `!gift` | everyone | free, with cooldowns |
+| `!biggift`, `!rain`, `!sink`, `!pet`, `!sign <text>`, `!day` | everyone | gifts and fun, paid with chips |
+| `!jump`, `!moon`, `!heavy`, `!speed`, `!slow`, `!fov`, `!teleport`, `!hub`, `!night` | everyone | player chaos |
+| `!strike`, `!underclock`, `!blackout` | everyone | factory chaos |
+| `!ambush`, `!boss` | everyone | creatures with the viewer's name above them |
+| `!1` `!2` `!3` / `!vote N` | everyone | vote for the next effect |
+| `!pot <chips>` | everyone | chip into the shared pot |
+| `!top`, `!stats` | everyone | leaderboard, session stats |
+| `!pause`, `!panic` | streamer, mods | pause chaos / cancel everything and remove creatures |
 | `!test <effect>` | streamer | run an effect for free |
-| `!test chips/bits/sub/gifts/raid [N]`, `!test autochaos` | streamer | simulate events for testing |
+| `!test chips/bits/sub/gifts/raid [N]`, `!test autochaos` | streamer | simulate events |
 
-Creatures arrive 3-5 s after a warning. No creatures while you are near the HUB (safe zone). Difficulty 1-3 changes all prices and creature counts at once. Raids spawn one ambush per 5 raiders (up to 5) and a boss for raids of 30+. Spawned creatures despawn after 5 minutes. Everything above, including spawn distance, delays, effect strength, raid rules and language, is configurable in Mods -> ChatControl.
+Everything (prices, cooldowns, strength, delays, counts, raids, votes, pot, difficulty, language, YouTube, OBS port) is configurable in **Mods -> ChatControl**.
 
-Prices grow with the number of active viewers.
+## Files
 
-## Configuration
-
-`%LOCALAPPDATA%\FactoryGame\Saved\ChatControl\Settings.json` is created on first launch. Viewer balances are stored next to it in `Economy.json`.
+- `%LOCALAPPDATA%\FactoryGame\Saved\ChatControl\Settings.json` - settings
+- `Economy.json` - viewer balances and the pot
+- `Sessions\` - a summary of every session
 
 ---
 
 # ChatControl (RU)
 
-Мод для Satisfactory: твой чат на Twitch играет вместе с тобой.
+Мод для Satisfactory: чат на Twitch и YouTube играет вместе с тобой.
 
-- **Чипы FICSIT** зрители получают за активность в чате и тратят на эффекты. Баланс сохраняется между стримами.
-- **Биты, сабы и гифт-сабы** превращаются в чипы, **рейд** запускает волну хаоса.
-- **Баллы канала**: награды с вводом текста привязываются к эффектам в `Settings.json`.
+- **Чипы FICSIT** зрители получают за активность в чате и тратят на эффекты.
+- **Биты, сабы, Super Chat и спонсорство** превращаются в чипы, **рейд** приносит засады и босса.
+- **Голосования, общая копилка, топ** - чтобы маленький чат был вовлечён.
 - **Автохаос**: когда чат молчит, ADA сама запускает случайный эффект.
-- **Защита**: бюджет хаоса, кулдауны, защита после смерти, `!pause` для стримера и модераторов.
+- **Защита**: бюджет хаоса, кулдауны, защита после смерти, безопасная зона у ХАБа, `!pause` и `!panic`.
+- **Виджеты OBS** берут данные с `http://localhost:8787/state`.
 
-Токен Twitch не нужен.
+Все настройки - в игре: **Моды -> ChatControl**.
