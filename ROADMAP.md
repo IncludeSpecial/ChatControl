@@ -1,24 +1,23 @@
 # ChatControl roadmap
 
-## Done
-- Twitch chat (anonymous IRC), FICSIT Chips economy, price scaling, chaos budget, Auto-Chaos
-- Bits, subs, gift subs, raids, channel points (via Settings.json)
-- Effects: hi, gift, biggift, jump, moon, heavy, ambush, boss
-- In-game settings page, Russian/English messages, icon and logo
+## Done (needs one full in-game test)
+- Twitch chat (anonymous IRC), YouTube live chat (Data API v3)
+- FICSIT Chips economy, price scaling, difficulty 1-3, chaos budget, Auto-Chaos
+- Bits, subs, gift subs, raids, channel points, Super Chats, memberships
+- Effects: hi, gift, biggift, rain, sink, pet, sign, day, night, jump, moon, heavy, speed, slow, fov, teleport, hub,
+  strike, underclock, blackout, ambush, boss
+- Viewer names above creatures, named pets for subs
+- Votes, shared pot, `!top`, `!stats`, session summary file
+- `!pause`, `!panic`, safe zone around the HUB
+- OBS data endpoint + widgets (feed, vote, pot and top)
+- In-game settings page, Russian/English, icon and logo
 
-## Batch 1 (done, needs in-game testing)
-- Player: `!speed`, `!slow`, `!teleport`, `!hub`, `!fov`
-- Factory: `!strike` (random machines stop for a while)
-- Streamer tools: `!panic`, safe zone around the HUB, difficulty preset
-
-## Next
-- Factory: `!overclock`, `!surge`, `!sink` (AWESOME Sink coupons), `!rain` (crates from the sky), `!blackout`
-- World: `!night` / `!day`, `!fog`
-- Player: `!drop`, inverted controls
-- Viewers in the world: `!sign <text>`, named pets, viewer name tags on creatures, statue of the top supporter
-- Chat games: `!vote`, shared chip goal, `!order`, bets, boss hunt, Twitch polls/predictions
-- Stats: `!top`, session summary on exit
-- OBS overlay (local web page), in-game event feed
-- Platforms: YouTube, Kick, Discord; Twitch follows (needs a WebSocket client)
+## Not possible or postponed
+- `!overclock` above 100%: the game requires power shards, so `!underclock` is used instead
+- `!fog`, `!drop`, inverted controls: no reliable game API found yet
+- Twitch follows and all channel point rewards: need a WebSocket client (the game does not ship one)
+- Twitch polls/predictions: need an OAuth token with write scopes
+- Kick, Discord
+- `!order` (chat orders with deadlines) and bets
 - Multiplayer support
-- Publish on GitHub and ficsit.app
+- Publishing on GitHub and ficsit.app (needs Switty's GitHub account)

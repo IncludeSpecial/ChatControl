@@ -134,6 +134,7 @@ private:
 
 	TQueue<FChatEvent, EQueueMode::Mpsc> IncomingEvents;
 	TSharedPtr<FTwitchIrcConnector> Twitch;
+	TSharedPtr<class FYouTubeChatConnector> YouTube;
 
 	TArray<FPendingChaos> ChaosQueue;
 	/** (time, weight) of harmful effects executed within the last minute */

@@ -52,6 +52,16 @@ struct FChatControlSettings
 	/** 1 = easy (pricier, fewer creatures), 2 = normal, 3 = hardcore (cheaper, more creatures) */
 	UPROPERTY() int32 Difficulty = 2;
 
+	// --- YouTube ---
+	/** YouTube Data API v3 key from Google Cloud Console. Empty = YouTube off */
+	UPROPERTY() FString YouTubeApiKey;
+	/** Channel id (UC...), channel link, live video id or live link */
+	UPROPERTY() FString YouTubeChannel;
+	/** Seconds between chat polls; each poll costs 5 of the 10 000 free daily quota units */
+	UPROPERTY() float YouTubePollSeconds = 10.f;
+	/** Chips per whole currency unit of a Super Chat */
+	UPROPERTY() int32 ChipsPerSuperChatUnit = 5;
+
 	// --- Creatures ---
 	/** No creatures while the player is within this many meters of the HUB. 0 = off */
 	UPROPERTY() float SafeZoneRadius = 40.f;

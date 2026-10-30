@@ -214,6 +214,23 @@ void UChatControlModConfig::Register(UConfigManager* ConfigManager, const FChatC
 		Tr(TEXT("1 = easy: prices x1.5, half the creatures. 2 = normal. 3 = hardcore: prices x0.6, double creatures."),
 		   TEXT("1 = лёгкая: цены x1.5, существ вдвое меньше. 2 = обычная. 3 = хардкор: цены x0.6, существ вдвое больше.")));
 
+	// --- YouTube ---
+	UConfigPropertySection* YouTube = AddSection(Root, TEXT("YouTube"), (Tr(TEXT("YouTube chat"), TEXT("Чат YouTube"))));
+	AddString(YouTube, TEXT("ApiKey"), Defaults.YouTubeApiKey,
+		Tr(TEXT("API key"), TEXT("API-ключ")),
+		Tr(TEXT("YouTube Data API v3 key from console.cloud.google.com. Empty = YouTube off."),
+		   TEXT("Ключ YouTube Data API v3 из console.cloud.google.com. Пусто = YouTube выключен.")));
+	AddString(YouTube, TEXT("Channel"), Defaults.YouTubeChannel,
+		Tr(TEXT("Channel or stream"), TEXT("Канал или трансляция")),
+		Tr(TEXT("Channel id (UC...) or link - the mod finds the live stream itself. Or a link to the stream."),
+		   TEXT("ID канала (UC...) или ссылка на него - мод сам найдёт эфир. Или ссылка на трансляцию.")));
+	AddInt(YouTube, TEXT("PollSeconds"), FMath::RoundToInt(Defaults.YouTubePollSeconds),
+		Tr(TEXT("Check chat every (s)"), TEXT("Проверять чат каждые (с)")),
+		Tr(TEXT("Lower = faster, but the free daily quota runs out sooner. 10 s is about 5 hours of streaming."),
+		   TEXT("Меньше = быстрее, но бесплатная дневная квота кончится раньше. 10 с - примерно 5 часов эфира.")));
+	AddInt(YouTube, TEXT("ChipsPerSuperChatUnit"), Defaults.ChipsPerSuperChatUnit,
+		Tr(TEXT("Chips per 1 currency unit of Super Chat"), TEXT("Чипов за 1 единицу валюты Super Chat")));
+
 	// --- Chips ---
 	UConfigPropertySection* Economy = AddSection(Root, TEXT("Economy"), Tr(TEXT("FICSIT Chips"), TEXT("Чипы FICSIT")));
 	AddInt(Economy, TEXT("ChipsPerInterval"), Defaults.ChipsPerInterval,
@@ -385,6 +402,12 @@ bool UChatControlModConfig::ApplyTo(UConfigManager* ConfigManager, FChatControlS
 	bChanged |= Read<UConfigPropertyString>(Main, TEXT("TwitchChannel"), Settings.TwitchChannel);
 	bChanged |= Read<UConfigPropertyString>(Main, TEXT("Language"), Settings.Language);
 	bChanged |= Read<UConfigPropertyInteger>(Main, TEXT("Difficulty"), Settings.Difficulty);
+
+	const UConfigPropertySection* YouTube = GetSection(Root, TEXT("YouTube"));
+	bChanged |= Read<UConfigPropertyString>(YouTube, TEXT("ApiKey"), Settings.YouTubeApiKey);
+	bChanged |= Read<UConfigPropertyString>(YouTube, TEXT("Channel"), Settings.YouTubeChannel);
+	bChanged |= ReadSeconds(YouTube, TEXT("PollSeconds"), Settings.YouTubePollSeconds, 1.f, 5.f);
+	bChanged |= Read<UConfigPropertyInteger>(YouTube, TEXT("ChipsPerSuperChatUnit"), Settings.ChipsPerSuperChatUnit);
 
 	const UConfigPropertySection* Economy = GetSection(Root, TEXT("Economy"));
 	bChanged |= Read<UConfigPropertyInteger>(Economy, TEXT("ChipsPerInterval"), Settings.ChipsPerInterval);

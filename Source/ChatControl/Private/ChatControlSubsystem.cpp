@@ -1,6 +1,7 @@
 #include "ChatControlSubsystem.h"
 #include "ChatControl.h"
 #include "Twitch/TwitchIrcConnector.h"
+#include "YouTube/YouTubeChatConnector.h"
 #include "ChatControlModConfig.h"
 #include "Configuration/ConfigManager.h"
 #include "FGChatManager.h"
@@ -74,6 +75,11 @@ void UChatControlSubsystem::RestartConnectors()
 {
 	// Destroying the connector stops and joins its thread
 	Twitch.Reset();
+	YouTube.Reset();
+	if (Settings.bEnabled && !Settings.YouTubeApiKey.IsEmpty() && !Settings.YouTubeChannel.IsEmpty())
+	{
+		YouTube = MakeShared<FYouTubeChatConnector>(Settings.YouTubeApiKey, Settings.YouTubeChannel, Settings.YouTubePollSeconds, IncomingEvents);
+	}
 	if (Settings.bEnabled && !Settings.TwitchChannel.IsEmpty())
 	{
 		Twitch = MakeShared<FTwitchIrcConnector>(Settings.TwitchChannel, IncomingEvents);
@@ -90,6 +96,7 @@ void UChatControlSubsystem::TickConfig(double Now)
 	NextConfigCheck = Now + 1.0;
 
 	const FString OldChannel = Settings.TwitchChannel;
+	const FString OldYouTube = Settings.YouTubeApiKey + Settings.YouTubeChannel;
 	const bool bWasEnabled = Settings.bEnabled;
 	if (!UChatControlModConfig::ApplyTo(ConfigManager, Settings))
 	{
@@ -97,7 +104,7 @@ void UChatControlSubsystem::TickConfig(double Now)
 	}
 	Settings.Save();
 	ChatText::SetLanguage(Settings.Language);
-	if (Settings.TwitchChannel != OldChannel || Settings.bEnabled != bWasEnabled)
+	if (Settings.TwitchChannel != OldChannel || Settings.bEnabled != bWasEnabled || Settings.YouTubeApiKey + Settings.YouTubeChannel != OldYouTube)
 	{
 		RestartConnectors();
 	}
@@ -140,6 +147,11 @@ TStatId UChatControlSubsystem::GetStatId() const
 void UChatControlSubsystem::Tick(float DeltaTime)
 {
 	const double Now = FPlatformTime::Seconds();
+
+	if (YouTube)
+	{
+		YouTube->Tick(Now);
+	}
 
 	FChatEvent Event;
 	while (IncomingEvents.Dequeue(Event))
@@ -228,6 +240,16 @@ void UChatControlSubsystem::HandleEvent(const FChatEvent& Event)
 		break;
 	}
 
+	case EChatEventType::SuperChat:
+	{
+		Economy.OnViewerMessage(Key, Event.DisplayName, Now, Settings.FirstMessageBonus);
+		const int32 Chips = Event.Amount * Settings.ChipsPerSuperChatUnit;
+		Economy.AddChips(Key, Event.DisplayName, Chips);
+		Announce(FText::Format(Tr(TEXT("{0} sent a Super Chat and got {1} chips!"), TEXT("{0} отправил(а) Super Chat и получил(а) {1} чипов!")), Name, FText::AsNumber(Chips)));
+		HandleCommand(Event);
+		break;
+	}
+
 	case EChatEventType::RewardRedeem:
 	{
 		Economy.OnViewerMessage(Key, Event.DisplayName, Now, Settings.FirstMessageBonus);
@@ -289,7 +311,7 @@ void UChatControlSubsystem::HandleEvent(const FChatEvent& Event)
 void UChatControlSubsystem::HandleCommand(const FChatEvent& Event)
 {
 	FString Text = Event.Text.TrimStartAndEnd();
-	if (Event.Type == EChatEventType::Bits && !Text.StartsWith(TEXT("!")))
+	if ((Event.Type == EChatEventType::Bits || Event.Type == EChatEventType::SuperChat) && !Text.StartsWith(TEXT("!")))
 	{
 		// Cheer messages start with "Cheer100 ...", so look for the command anywhere
 		const int32 CommandStart = Text.Find(TEXT(" !"));

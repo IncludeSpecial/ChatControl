@@ -10,6 +10,7 @@ enum class EChatEventType : uint8
 	Subscription,  // sub / resub
 	GiftSubs,      // one or many gifted subs
 	Raid,
+	SuperChat,     // YouTube Super Chat / Super Sticker, Amount in whole currency units
 };
 
 /** Platform-independent chat event. Produced by connectors on a worker thread, consumed on the game thread. */
@@ -17,7 +18,7 @@ struct FChatEvent
 {
 	EChatEventType Type = EChatEventType::Message;
 
-	/** "twitch", later "youtube" */
+	/** "twitch" or "youtube" */
 	FString Platform;
 	/** Stable per-platform user id (used as economy key) */
 	FString UserId;

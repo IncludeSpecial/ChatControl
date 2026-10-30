@@ -3,6 +3,7 @@
 #include "ChatControlSubsystem.h"
 #include "ChatControl.h"
 #include "Twitch/TwitchIrcConnector.h"
+#include "YouTube/YouTubeChatConnector.h"
 #include "HttpServerModule.h"
 #include "IHttpRouter.h"
 #include "HttpServerResponse.h"
@@ -115,6 +116,7 @@ FString UChatControlSubsystem::BuildOverlayJson() const
 	Chaos->SetNumberField(TEXT("queued"), ChaosQueue.Num());
 	Chaos->SetBoolField(TEXT("paused"), bChaosPaused);
 	Chaos->SetBoolField(TEXT("connected"), Twitch.IsValid() && Twitch->IsConnected());
+	Chaos->SetBoolField(TEXT("youtube"), YouTube.IsValid() && YouTube->IsConnected());
 	Root->SetObjectField(TEXT("chaos"), Chaos);
 
 	FString Out;
