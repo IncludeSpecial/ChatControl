@@ -17,7 +17,7 @@
 - `!fog`, `!drop`, inverted controls: no reliable game API found yet
 - Twitch follows and all channel point rewards: need a WebSocket client (the game does not ship one)
 - Twitch polls/predictions: need an OAuth token with write scopes
-- Kick, Discord
-- `!order` (chat orders with deadlines) and bets
-- Multiplayer support
 - Publishing on GitHub and ficsit.app (needs Switty's GitHub account)
+
+## Dropped
+- Kick, Discord, `!order`, bets, multiplayer (decided 2026-10-31)
