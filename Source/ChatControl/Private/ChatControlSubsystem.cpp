@@ -44,6 +44,8 @@ void UChatControlSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	NextEconomySave = Now + 60.0;
 	NextConfigCheck = Now + 1.0;
 	LastTriggerTime = Now;
+	SessionStartTime = Now;
+	NextVoteTime = Now + Settings.VoteIntervalMinutes * 60.0;
 
 	RestartConnectors();
 
@@ -62,6 +64,7 @@ void UChatControlSubsystem::Deinitialize()
 	}
 	TimedEffects.Empty();
 	Economy.Save();
+	SaveSessionSummary();
 	Super::Deinitialize();
 }
 
@@ -142,15 +145,22 @@ void UChatControlSubsystem::Tick(float DeltaTime)
 		HandleEvent(Event);
 	}
 
-	if (const AFGCharacterPlayer* Player = FindPlayer(); Player && !Player->IsAliveAndWell())
+	if (const AFGCharacterPlayer* Player = FindPlayer())
 	{
-		LastDeathTime = Now;
+		const bool bDead = !Player->IsAliveAndWell();
+		if (bDead)
+		{
+			LastDeathTime = Now;
+			SessionDeaths += bPlayerWasDead ? 0 : 1;
+		}
+		bPlayerWasDead = bDead;
 	}
 
 	TickConfig(Now);
 	TickEconomy(Now);
 	TickTimedEffects(Now);
 	TickDelayedActions(Now);
+	TickVotes(Now);
 	TickNameTags();
 	TickChaosQueue(Now);
 	TickAutoChaos(Now);
@@ -345,6 +355,11 @@ void UChatControlSubsystem::HandleCommand(const FChatEvent& Event)
 		return;
 	}
 
+	if (HandleGameCommand(Event, Command, Args))
+	{
+		return;
+	}
+
 	if (Effects.Contains(Command))
 	{
 		RequestEffect(Command, Key, Event.DisplayName, false, RawArgs);
@@ -471,7 +486,12 @@ bool UChatControlSubsystem::ExecuteEffect(const FChatEffect& Effect, const FStri
 	{
 		return false;
 	}
-	return Effect.Execute(Ctx);
+	if (!Effect.Execute(Ctx))
+	{
+		return false;
+	}
+	RecordSessionEffect(ViewerName);
+	return true;
 }
 
 void UChatControlSubsystem::TickEconomy(double Now)

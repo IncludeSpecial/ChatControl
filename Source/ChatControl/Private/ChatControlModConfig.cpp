@@ -284,6 +284,20 @@ void UChatControlModConfig::Register(UConfigManager* ConfigManager, const FChatC
 	AddInt(AutoChaos, TEXT("IdleMinutes"), FMath::RoundToInt(Defaults.AutoChaosIdleSeconds / 60.f),
 		Tr(TEXT("After quiet time (min)"), TEXT("После тишины (мин)")));
 
+	// --- Chat games ---
+	UConfigPropertySection* Games = AddSection(Root, TEXT("Games"), Tr(TEXT("Chat games"), TEXT("Игры с чатом")));
+	AddBool(Games, TEXT("Votes"), Defaults.bVotesEnabled,
+		Tr(TEXT("Votes"), TEXT("Голосования")),
+		Tr(TEXT("Chat picks one of three paid effects with !1 / !2 / !3, for free"), TEXT("Чат выбирает один из трёх платных эффектов командами !1 / !2 / !3, бесплатно")));
+	AddInt(Games, TEXT("VoteInterval"), Defaults.VoteIntervalMinutes, Tr(TEXT("Vote every (min)"), TEXT("Голосование каждые (мин)")));
+	AddInt(Games, TEXT("VoteDuration"), FMath::RoundToInt(Defaults.VoteDurationSeconds), Tr(TEXT("Vote lasts (s)"), TEXT("Голосование длится (с)")));
+	AddInt(Games, TEXT("VoteReward"), Defaults.VoteReward, Tr(TEXT("Chips for voting"), TEXT("Чипы за голос")));
+	AddBool(Games, TEXT("Goal"), Defaults.bGoalEnabled,
+		Tr(TEXT("Shared pot"), TEXT("Общая копилка")),
+		Tr(TEXT("Viewers chip in with !pot <amount>; when it is full the effect below runs"), TEXT("Зрители скидываются командой !pot <сколько>; когда копилка полна, запускается эффект ниже")));
+	AddString(Games, TEXT("GoalEffect"), Defaults.GoalEffect, Tr(TEXT("Pot effect"), TEXT("Эффект копилки")));
+	AddInt(Games, TEXT("GoalChips"), Defaults.GoalChips, Tr(TEXT("Pot size (chips)"), TEXT("Размер копилки (чипы)")));
+
 	// --- Viewers in the world ---
 	UConfigPropertySection* Viewers = AddSection(Root, TEXT("Viewers"), Tr(TEXT("Viewers in the world"), TEXT("Зрители в мире")));
 	AddBool(Viewers, TEXT("PetOnSub"), Defaults.bPetOnSub,
@@ -374,6 +388,15 @@ bool UChatControlModConfig::ApplyTo(UConfigManager* ConfigManager, FChatControlS
 	const UConfigPropertySection* AutoChaos = GetSection(Root, TEXT("AutoChaos"));
 	bChanged |= Read<UConfigPropertyBool>(AutoChaos, TEXT("Enabled"), Settings.bAutoChaos);
 	bChanged |= ReadSeconds(AutoChaos, TEXT("IdleMinutes"), Settings.AutoChaosIdleSeconds, 60.f, 60.f);
+
+	const UConfigPropertySection* Games = GetSection(Root, TEXT("Games"));
+	bChanged |= Read<UConfigPropertyBool>(Games, TEXT("Votes"), Settings.bVotesEnabled);
+	bChanged |= Read<UConfigPropertyInteger>(Games, TEXT("VoteInterval"), Settings.VoteIntervalMinutes);
+	bChanged |= ReadSeconds(Games, TEXT("VoteDuration"), Settings.VoteDurationSeconds, 1.f, 10.f);
+	bChanged |= Read<UConfigPropertyInteger>(Games, TEXT("VoteReward"), Settings.VoteReward);
+	bChanged |= Read<UConfigPropertyBool>(Games, TEXT("Goal"), Settings.bGoalEnabled);
+	bChanged |= Read<UConfigPropertyString>(Games, TEXT("GoalEffect"), Settings.GoalEffect);
+	bChanged |= Read<UConfigPropertyInteger>(Games, TEXT("GoalChips"), Settings.GoalChips);
 
 	const UConfigPropertySection* Viewers = GetSection(Root, TEXT("Viewers"));
 	bChanged |= Read<UConfigPropertyBool>(Viewers, TEXT("PetOnSub"), Settings.bPetOnSub);

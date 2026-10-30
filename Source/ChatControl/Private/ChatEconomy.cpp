@@ -89,6 +89,24 @@ int32 FChatEconomy::PayActiveViewers(double Now, double ActiveWindow, int32 Amou
 	return Paid;
 }
 
+TArray<TPair<FString, int32>> FChatEconomy::GetTopSpenders(int32 Count) const
+{
+	TArray<TPair<FString, int32>> Result;
+	for (const auto& Pair : Data.Viewers)
+	{
+		if (Pair.Value.ChipsSpent > 0 && !Pair.Key.StartsWith(TEXT("system:")))
+		{
+			Result.Add({ Pair.Value.DisplayName, Pair.Value.ChipsSpent });
+		}
+	}
+	Result.Sort([](const TPair<FString, int32>& A, const TPair<FString, int32>& B) { return A.Value > B.Value; });
+	if (Result.Num() > Count)
+	{
+		Result.SetNum(Count);
+	}
+	return Result;
+}
+
 int32 FChatEconomy::CountActiveViewers(double Now, double ActiveWindow) const
 {
 	int32 Count = 0;

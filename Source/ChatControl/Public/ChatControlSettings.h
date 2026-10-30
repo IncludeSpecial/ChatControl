@@ -68,6 +68,17 @@ struct FChatControlSettings
 	/** Show the viewer's name above creatures they sent */
 	UPROPERTY() bool bCreatureNameTags = true;
 
+	// --- Chat games ---
+	UPROPERTY() bool bVotesEnabled = true;
+	UPROPERTY() int32 VoteIntervalMinutes = 10;
+	UPROPERTY() float VoteDurationSeconds = 60.f;
+	/** Chips for taking part in a vote */
+	UPROPERTY() int32 VoteReward = 5;
+	/** Shared pot: when chat fills GoalChips together, GoalEffect runs */
+	UPROPERTY() bool bGoalEnabled = true;
+	UPROPERTY() FString GoalEffect = TEXT("boss");
+	UPROPERTY() int32 GoalChips = 1000;
+
 	// --- Raids ---
 	/** One ambush per this many raiders */
 	UPROPERTY() int32 RaidViewersPerAmbush = 5;

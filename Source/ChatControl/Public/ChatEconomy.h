@@ -25,6 +25,8 @@ struct FChatEconomyData
 
 	/** Key: "platform:userId" */
 	UPROPERTY() TMap<FString, FChatViewerRecord> Viewers;
+	/** Shared chip pot chat fills together */
+	UPROPERTY() int32 Pot = 0;
 };
 
 /** FICSIT Chips: viewers earn them by being active in chat and spend them on effects. Persisted between streams. */
@@ -48,6 +50,11 @@ public:
 	int32 CountActiveViewers(double Now, double ActiveWindow) const;
 
 	bool IsDirty() const { return bDirty; }
+
+	int32 GetPot() const { return Data.Pot; }
+	void AddToPot(int32 Amount) { Data.Pot = FMath::Max(0, Data.Pot + Amount); bDirty = true; }
+	/** (display name, chips spent), highest first */
+	TArray<TPair<FString, int32>> GetTopSpenders(int32 Count) const;
 
 private:
 	static FString GetSavePath();

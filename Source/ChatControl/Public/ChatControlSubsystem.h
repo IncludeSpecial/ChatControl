@@ -96,6 +96,16 @@ private:
 	/** Keeps name tags readable by turning them to the camera */
 	void TickNameTags();
 
+	// Chat games (ChatControlGames.cpp)
+	/** Votes, pot, top and stats commands. Returns true if the command was handled. */
+	bool HandleGameCommand(const FChatEvent& Event, const FString& Command, const FString& Args);
+	void HandlePotCommand(const FChatEvent& Event, const FString& Args);
+	void TickVotes(double Now);
+	void FinishVote(double Now);
+	void RecordSessionEffect(const FString& ViewerName);
+	FText GetSessionSummary() const;
+	void SaveSessionSummary() const;
+
 	void TickEconomy(double Now);
 	void TickChaosQueue(double Now);
 	void TickAutoChaos(double Now);
@@ -124,6 +134,19 @@ private:
 	TMap<FString, FTimedEffect> TimedEffects;
 	TArray<TPair<double, TFunction<void()>>> DelayedActions;
 	TArray<TWeakObjectPtr<AActor>> SpawnedActors;
+
+	bool bVoteActive = false;
+	double VoteEndTime = 0.0;
+	double NextVoteTime = 0.0;
+	TArray<FString> VoteOptions;
+	/** viewer key -> option index */
+	TMap<FString, int32> Votes;
+
+	double SessionStartTime = 0.0;
+	int32 SessionEffectCount = 0;
+	int32 SessionDeaths = 0;
+	bool bPlayerWasDead = false;
+	TMap<FString, int32> SessionEffectsByViewer;
 	TArray<TWeakObjectPtr<class UTextRenderComponent>> NameTags;
 	/** viewer key -> their pet */
 	TMap<FString, TWeakObjectPtr<AActor>> Pets;
