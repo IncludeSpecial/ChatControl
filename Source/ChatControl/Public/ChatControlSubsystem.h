@@ -56,6 +56,10 @@ public:
 
 	/** Remembers an actor spawned by chat, so !panic can remove it */
 	void TrackSpawned(AActor* Actor) { SpawnedActors.Add(Actor); }
+	/** Remembers who left a sign, so !clear can remove it by nick */
+	void TrackSign(AActor* Sign, const FString& ViewerName) { Signs.Emplace(Sign, ViewerName); }
+	/** Removes all signs, or only the ones left by Viewer; returns how many were removed */
+	int32 ClearSigns(const FString& Viewer);
 	bool GetHubLocation(FVector& OutLocation) const;
 	/** True while the player is close to the HUB and creature effects should wait */
 	bool IsInSafeZone() const;
@@ -115,6 +119,8 @@ private:
 	void StopOverlay();
 	void PushOverlayEvent(const FString& Text) const;
 	FString BuildOverlayJson() const;
+	FString GetOverlayFolder() const;
+	TUniquePtr<struct FHttpServerResponse> ServeOverlayFile(const FString& RelativePath) const;
 
 	void TickEconomy(double Now);
 	void TickChaosQueue(double Now);
@@ -152,6 +158,7 @@ private:
 	TMap<FString, FTimedEffect> TimedEffects;
 	TArray<TPair<double, TFunction<void()>>> DelayedActions;
 	TArray<TWeakObjectPtr<AActor>> SpawnedActors;
+	TArray<TPair<TWeakObjectPtr<AActor>, FString>> Signs;
 
 	bool bVoteActive = false;
 	double VoteEndTime = 0.0;
@@ -162,6 +169,7 @@ private:
 
 	TWeakPtr<class IHttpRouter> OverlayRouter;
 	FHttpRouteHandle OverlayRoute;
+	FHttpRouteHandle OverlayFilesRoute;
 	/** (id, text) of recent announcements for the overlay feed; mutable because Announce is const */
 	mutable TArray<TPair<int32, FString>> OverlayEvents;
 	mutable int32 OverlayEventCounter = 0;

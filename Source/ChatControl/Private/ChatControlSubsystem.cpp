@@ -478,6 +478,17 @@ void UChatControlSubsystem::HandleCommand(const FChatEvent& Event)
 		return;
 	}
 
+	if ((Command == TEXT("clear") || Command == TEXT("убрать")) && bCanModerate)
+	{
+		FString Viewer = RawArgs;
+		Viewer.RemoveFromStart(TEXT("@"));
+		const int32 Removed = ClearSigns(Viewer);
+		Announce(Viewer.IsEmpty()
+			? FText::Format(Tr(TEXT("Signs removed: {0}"), TEXT("Убрано табличек: {0}")), FText::AsNumber(Removed))
+			: FText::Format(Tr(TEXT("Signs by {0} removed: {1}"), TEXT("Убрано табличек {0}: {1}")), FText::FromString(Viewer), FText::AsNumber(Removed)));
+		return;
+	}
+
 	if (Command == TEXT("test") && Event.bIsBroadcaster)
 	{
 		HandleTestCommand(Event, Args);
@@ -845,8 +856,29 @@ void UChatControlSubsystem::Panic()
 		}
 	}
 	SpawnedActors.Empty();
+	Signs.Empty();
 	Announce(FText::Format(Tr(TEXT("PANIC! Chaos cancelled: {0} queued effects, {1} creatures removed."),
 		TEXT("ПАНИКА! Хаос отменён: убрано {0} эффектов из очереди и {1} существ.")), FText::AsNumber(Removed), FText::AsNumber(Creatures)));
+}
+
+int32 UChatControlSubsystem::ClearSigns(const FString& Viewer)
+{
+	int32 Removed = 0;
+	Signs.RemoveAll([&](const TPair<TWeakObjectPtr<AActor>, FString>& Entry)
+	{
+		if (!Entry.Key.IsValid())
+		{
+			return true;
+		}
+		if (!Viewer.IsEmpty() && !Entry.Value.Equals(Viewer, ESearchCase::IgnoreCase))
+		{
+			return false;
+		}
+		Entry.Key->Destroy();
+		++Removed;
+		return true;
+	});
+	return Removed;
 }
 
 int32 UChatControlSubsystem::GetChaosBudgetUsed(double Now) const

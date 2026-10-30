@@ -635,6 +635,7 @@ TMap<FString, FChatEffect> ChatEffects::CreateAll()
 		Ctx.Subsystem->AttachNameTag(Sign, Message, FColor::White, 170.f);
 		Sign->SetLifeSpan(FMath::Max(10.f, Ctx.Settings->Duration));
 		Ctx.Subsystem->TrackSpawned(Sign);
+		Ctx.Subsystem->TrackSign(Sign, Ctx.ViewerName);
 		Ctx.Subsystem->Announce(FText::Format(Tr(TEXT("{0} left a sign: {1}"), TEXT("{0} оставляет табличку: {1}")), FText::FromString(Ctx.ViewerName), FText::FromString(Message)));
 		return true;
 	});

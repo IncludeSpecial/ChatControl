@@ -360,6 +360,10 @@ void UChatControlModConfig::Register(UConfigManager* ConfigManager, const FChatC
 		Tr(TEXT("Widgets in OBS read data from http://localhost:<port>/state. Changes apply after restart."),
 		   TEXT("Виджеты в OBS берут данные с http://localhost:<порт>/state. Применяется после перезапуска.")));
 	AddInt(Obs, TEXT("Port"), Defaults.OverlayPort, Tr(TEXT("Port"), TEXT("Порт")));
+	AddString(Obs, TEXT("Folder"), Defaults.OverlayFolder,
+		Tr(TEXT("Widget folder"), TEXT("Папка виджетов")),
+		Tr(TEXT("Files from this folder open in OBS as http://localhost:<port>/obs/<file>. Empty = Saved/ChatControl/Overlay."),
+		   TEXT("Файлы из этой папки открываются в OBS как http://localhost:<порт>/obs/<файл>. Пусто = Saved/ChatControl/Overlay.")));
 
 	// --- Viewers in the world ---
 	UConfigPropertySection* Viewers = AddSection(Root, TEXT("Viewers"), Tr(TEXT("Viewers in the world"), TEXT("Зрители в мире")));
@@ -503,6 +507,7 @@ bool UChatControlModConfig::ApplyTo(UConfigManager* ConfigManager, FChatControlS
 	const UConfigPropertySection* Obs = GetSection(Root, TEXT("Obs"));
 	bChanged |= Read<UConfigPropertyBool>(Obs, TEXT("Enabled"), Settings.bOverlayEnabled);
 	bChanged |= Read<UConfigPropertyInteger>(Obs, TEXT("Port"), Settings.OverlayPort);
+	bChanged |= Read<UConfigPropertyString>(Obs, TEXT("Folder"), Settings.OverlayFolder);
 
 	const UConfigPropertySection* Viewers = GetSection(Root, TEXT("Viewers"));
 	bChanged |= Read<UConfigPropertyBool>(Viewers, TEXT("PetOnSub"), Settings.bPetOnSub);

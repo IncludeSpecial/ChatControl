@@ -27,6 +27,7 @@ Twitch needs no token (chat is read anonymously). YouTube needs a free YouTube D
 | `!pot <chips>` | everyone | chip into the shared pot |
 | `!top`, `!stats` | everyone | leaderboard, session stats |
 | `!pause`, `!panic` | streamer, mods | pause chaos / cancel everything and remove creatures |
+| `!clear [nick]` | streamer, mods | remove all signs, or only the ones left by that viewer |
 | `!test <effect>` | streamer | run an effect for free |
 | `!test chips/bits/sub/gifts/raid [N]`, `!test autochaos` | streamer | simulate events |
 

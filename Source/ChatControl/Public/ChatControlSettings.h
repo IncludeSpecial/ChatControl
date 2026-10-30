@@ -118,6 +118,8 @@ struct FChatControlSettings
 	UPROPERTY() bool bOverlayEnabled = true;
 	/** Widgets read http://localhost:<port>/state */
 	UPROPERTY() int32 OverlayPort = 8787;
+	/** Folder with widget files served at http://localhost:<port>/obs/; empty = Saved/ChatControl/Overlay */
+	UPROPERTY() FString OverlayFolder;
 
 	// --- Raids ---
 	/** One ambush per this many raiders */

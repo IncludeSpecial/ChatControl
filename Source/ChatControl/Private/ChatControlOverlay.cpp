@@ -1,5 +1,5 @@
-// Local data endpoint for OBS widgets: http://localhost:<port>/state returns JSON.
-// The widgets themselves are plain HTML files the streamer adds as OBS browser sources.
+// Local data endpoint for OBS widgets: http://localhost:<port>/state returns JSON,
+// and http://localhost:<port>/obs/<file> serves the widget files themselves.
 #include "ChatControlSubsystem.h"
 #include "ChatControl.h"
 #include "Twitch/TwitchIrcConnector.h"
@@ -10,6 +10,9 @@
 #include "Dom/JsonObject.h"
 #include "Serialization/JsonWriter.h"
 #include "Serialization/JsonSerializer.h"
+#include "GenericPlatform/GenericPlatformHttp.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 
 void UChatControlSubsystem::StartOverlay()
 {
@@ -35,9 +38,17 @@ void UChatControlSubsystem::StartOverlay()
 			OnComplete(MoveTemp(Response));
 			return true;
 		}));
+	// OBS blocks local-file pages from reaching localhost, so the widgets are served from here too
+	OverlayFilesRoute = Router->BindRoute(FHttpPath(TEXT("/obs")), EHttpServerRequestVerbs::VERB_GET,
+		FHttpRequestHandler::CreateLambda([WeakThis](const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete)
+		{
+			OnComplete(WeakThis.IsValid() ? WeakThis->ServeOverlayFile(Request.RelativePath.GetPath())
+				: FHttpServerResponse::Error(EHttpServerResponseCodes::NotFound));
+			return true;
+		}));
 	OverlayRouter = Router;
 	FHttpServerModule::Get().StartAllListeners();
-	UE_LOG(LogChatControl, Log, TEXT("Overlay: http://localhost:%d/state"), Settings.OverlayPort);
+	UE_LOG(LogChatControl, Log, TEXT("Overlay: http://localhost:%d/state, widgets from %s"), Settings.OverlayPort, *GetOverlayFolder());
 }
 
 void UChatControlSubsystem::StopOverlay()
@@ -45,9 +56,47 @@ void UChatControlSubsystem::StopOverlay()
 	if (TSharedPtr<IHttpRouter> Router = OverlayRouter.Pin(); Router && OverlayRoute.IsValid())
 	{
 		Router->UnbindRoute(OverlayRoute);
+		Router->UnbindRoute(OverlayFilesRoute);
 	}
 	OverlayRoute.Reset();
+	OverlayFilesRoute.Reset();
 	OverlayRouter.Reset();
+}
+
+FString UChatControlSubsystem::GetOverlayFolder() const
+{
+	FString Folder = Settings.OverlayFolder.TrimStartAndEnd().TrimQuotes();
+	if (Folder.IsEmpty())
+	{
+		Folder = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("ChatControl"), TEXT("Overlay"));
+	}
+	return FPaths::ConvertRelativePathToFull(Folder);
+}
+
+TUniquePtr<FHttpServerResponse> UChatControlSubsystem::ServeOverlayFile(const FString& RelativePath) const
+{
+	const FString Folder = GetOverlayFolder();
+	FString Path = FPaths::ConvertRelativePathToFull(FPaths::Combine(Folder, FGenericPlatformHttp::UrlDecode(RelativePath)));
+	FPaths::NormalizeFilename(Path);
+	FString Root = Folder;
+	FPaths::NormalizeDirectoryName(Root);
+	TArray<uint8> Bytes;
+	// Only files inside the widget folder, never "../" outside it
+	if (!Path.StartsWith(Root + TEXT("/")) || !FFileHelper::LoadFileToArray(Bytes, *Path, FILEREAD_Silent))
+	{
+		return FHttpServerResponse::Error(EHttpServerResponseCodes::NotFound);
+	}
+	static const TMap<FString, FString> Types = {
+		{ TEXT("html"), TEXT("text/html; charset=utf-8") }, { TEXT("js"), TEXT("text/javascript; charset=utf-8") },
+		{ TEXT("css"), TEXT("text/css; charset=utf-8") }, { TEXT("json"), TEXT("application/json") },
+		{ TEXT("png"), TEXT("image/png") }, { TEXT("jpg"), TEXT("image/jpeg") }, { TEXT("svg"), TEXT("image/svg+xml") },
+		{ TEXT("webp"), TEXT("image/webp") }, { TEXT("gif"), TEXT("image/gif") }, { TEXT("ttf"), TEXT("font/ttf") },
+		{ TEXT("otf"), TEXT("font/otf") }, { TEXT("woff2"), TEXT("font/woff2") }, { TEXT("mp3"), TEXT("audio/mpeg") },
+		{ TEXT("wav"), TEXT("audio/wav") }, { TEXT("webm"), TEXT("video/webm") }, { TEXT("mp4"), TEXT("video/mp4") } };
+	const FString* Type = Types.Find(FPaths::GetExtension(Path).ToLower());
+	TUniquePtr<FHttpServerResponse> Response = FHttpServerResponse::Create(MoveTemp(Bytes), Type ? *Type : TEXT("application/octet-stream"));
+	Response->Headers.Add(TEXT("Cache-Control"), { TEXT("no-store") });
+	return Response;
 }
 
 void UChatControlSubsystem::PushOverlayEvent(const FString& Text) const
