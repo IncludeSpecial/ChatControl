@@ -4,6 +4,7 @@
 #include "FGChatManager.h"
 #include "FGCharacterPlayer.h"
 #include "EngineUtils.h"
+#include "GameFramework/GameStateBase.h"
 
 #define LOCTEXT_NAMESPACE "ChatControl"
 
@@ -87,6 +88,11 @@ void UChatControlSubsystem::Announce(const FText& Message) const
 		ChatMessage.MessageSender = FText::FromString(TEXT("ChatControl"));
 		ChatMessage.MessageSenderColor = FLinearColor(0.57f, 0.27f, 1.f); // Twitch purple
 		ChatMessage.MessageText = Message;
+		// The chat sorts by timestamp: without it the message lands at the top of history and never shows as new
+		if (const AGameStateBase* GameState = World->GetGameState())
+		{
+			ChatMessage.ServerTimeStamp = GameState->GetServerWorldTimeSeconds();
+		}
 		Chat->AddChatMessageToReceived(ChatMessage);
 	}
 }
