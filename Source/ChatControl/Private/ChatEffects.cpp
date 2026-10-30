@@ -48,20 +48,31 @@ namespace
 	/** Spawned creatures despawn after this long, so chat can't flood the save with enemies */
 	constexpr float CreatureLifeSpan = 300.f;
 
-	/** Finds ground on a ring around the player, so creatures come from the sides instead of spawning inside the player */
+	/**
+	 * Finds ground on a ring around the player at roughly the player's height and in line of sight,
+	 * so creatures don't end up on tree tops, roofs or behind walls.
+	 */
 	bool FindSpawnPoint(UWorld* World, const AActor* Player, FVector& OutLocation)
 	{
 		const FVector Center = Player->GetActorLocation();
 		FCollisionQueryParams Params(TEXT("ChatControlSpawn"), false, Player);
-		for (int32 Attempt = 0; Attempt < 12; ++Attempt)
+		for (int32 Attempt = 0; Attempt < 16; ++Attempt)
 		{
 			const float Angle = FMath::FRandRange(0.f, 2.f * PI);
-			const float Distance = FMath::FRandRange(1000.f, 1600.f);
+			// Start close and widen the ring if nothing fits
+			const float Distance = FMath::FRandRange(600.f, 900.f) + Attempt * 50.f;
 			const FVector Probe = Center + FVector(FMath::Cos(Angle), FMath::Sin(Angle), 0.f) * Distance;
-			FHitResult Hit;
-			if (World->LineTraceSingleByChannel(Hit, Probe + FVector(0, 0, 1500.f), Probe - FVector(0, 0, 3000.f), ECC_Visibility, Params))
+
+			// The spot must be visible from the player at chest height
+			FHitResult Blocked;
+			if (World->LineTraceSingleByChannel(Blocked, Center, Probe, ECC_Visibility, Params))
 			{
-				OutLocation = Hit.ImpactPoint + FVector(0, 0, 150.f);
+				continue;
+			}
+			FHitResult Ground;
+			if (World->LineTraceSingleByChannel(Ground, Probe, Probe - FVector(0, 0, 800.f), ECC_Visibility, Params))
+			{
+				OutLocation = Ground.ImpactPoint + FVector(0, 0, 120.f);
 				return true;
 			}
 		}
@@ -93,11 +104,16 @@ namespace
 			{
 				Creature->SpawnDefaultController();
 			}
-			if (AFGCreature* FGCreature = Cast<AFGCreature>(Creature))
+			// Creatures without a spawner and without persistence get culled by the game right away
+			AFGCreature* FGCreature = Cast<AFGCreature>(Creature);
+			if (FGCreature)
 			{
-				FGCreature->SetIsPersistent(false);
+				FGCreature->SetIsPersistent(true);
 			}
 			Creature->SetLifeSpan(CreatureLifeSpan);
+			UE_LOG(LogChatControl, Log, TEXT("Spawned %s %.0f m from player, enabled=%d, controller=%s"),
+				*CreatureClass->GetName(), FVector::Dist(Location, Ctx.Player->GetActorLocation()) / 100.f,
+				FGCreature ? FGCreature->GetIsEnabled() : -1, *GetNameSafe(Creature->GetController()));
 			++Spawned;
 		}
 		if (Spawned == 0)
@@ -133,58 +149,75 @@ namespace
 		return true;
 	}
 
-	/** State of one scaled movement property, shared between the maintain and revert callbacks */
-	struct FScaledMovement
+	UCharacterMovementComponent* GetPlayerMovement(const UChatControlSubsystem* Subsystem)
 	{
-		TWeakObjectPtr<UCharacterMovementComponent> Movement;
-		float Original = 0.f;
-	};
+		const AFGCharacterPlayer* Player = Subsystem->FindPlayer();
+		return Player ? Player->GetCharacterMovement() : nullptr;
+	}
+
+	void LogMovementDiagnostics(const FChatEffectContext& Ctx, const TCHAR* Effect)
+	{
+		const UCharacterMovementComponent* Movement = Ctx.Player->GetCharacterMovement();
+		UE_LOG(LogChatControl, Log, TEXT("%s on %s: locally controlled=%d, mode=%d, gravityZ=%.1f, gravityScale=%.2f, jumpZ=%.1f"),
+			Effect, *Ctx.Player->GetName(), Ctx.Player->IsLocallyControlled(), (int32)Movement->MovementMode,
+			Movement->GetGravityZ(), Movement->GravityScale, Movement->JumpZVelocity);
+	}
 
 	/**
-	 * Multiplies a movement property for the effect duration. The value is re-applied every tick because the game
-	 * resets movement properties on its own (respawn, movement mode changes). Effects sharing a slot replace each other.
+	 * Changes how strongly the player falls by adding vertical velocity every tick while airborne.
+	 * Works on velocity directly because the game does not reliably use GravityScale for the player.
+	 * 0.25 = moon, 3 = heavy.
 	 */
-	bool ScaleMovementTemporarily(const FChatEffectContext& Ctx, const FString& Slot, float UCharacterMovementComponent::* Property, float Multiplier, const FText& Message)
+	bool ScaleGravityTemporarily(const FChatEffectContext& Ctx, float Multiplier, const FText& Message)
 	{
 		if (!Ctx.Player || !Ctx.Player->GetCharacterMovement())
 		{
 			return false;
 		}
+		LogMovementDiagnostics(Ctx, TEXT("gravity"));
 		UChatControlSubsystem* Subsystem = Ctx.Subsystem;
-		TSharedRef<FScaledMovement> State = MakeShared<FScaledMovement>();
-		Subsystem->StartTimedEffect(Slot, Ctx.Settings->Duration,
-			[Subsystem, State, Property, Multiplier, Slot]
+		UWorld* World = Ctx.World;
+		Subsystem->StartTimedEffect(TEXT("gravity"), Ctx.Settings->Duration,
+			[Subsystem, World, Multiplier]
 			{
-				const AFGCharacterPlayer* Player = Subsystem->FindPlayer();
-				UCharacterMovementComponent* Movement = Player ? Player->GetCharacterMovement() : nullptr;
+				UCharacterMovementComponent* Movement = GetPlayerMovement(Subsystem);
+				if (Movement && Movement->IsFalling())
+				{
+					// GetGravityZ is negative; (1 - Multiplier) of it is added back (moon) or extra applied (heavy)
+					Movement->Velocity.Z -= (1.f - Multiplier) * Movement->GetGravityZ() * World->GetDeltaSeconds();
+				}
+			},
+			[] {});
+		Subsystem->Announce(Message);
+		return true;
+	}
+
+	/** Multiplies the vertical speed at the moment the player leaves the ground with upward speed (a jump) */
+	bool BoostJumpsTemporarily(const FChatEffectContext& Ctx, float Multiplier, const FText& Message)
+	{
+		if (!Ctx.Player || !Ctx.Player->GetCharacterMovement())
+		{
+			return false;
+		}
+		LogMovementDiagnostics(Ctx, TEXT("jump"));
+		UChatControlSubsystem* Subsystem = Ctx.Subsystem;
+		TSharedRef<bool> bWasFalling = MakeShared<bool>(Ctx.Player->GetCharacterMovement()->IsFalling());
+		Subsystem->StartTimedEffect(TEXT("jump"), Ctx.Settings->Duration,
+			[Subsystem, bWasFalling, Multiplier]
+			{
+				UCharacterMovementComponent* Movement = GetPlayerMovement(Subsystem);
 				if (!Movement)
 				{
 					return;
 				}
-				if (State->Movement != Movement)
+				const bool bFalling = Movement->IsFalling();
+				if (bFalling && !*bWasFalling && Movement->Velocity.Z > 100.f)
 				{
-					// First tick, or the player respawned with a new movement component
-					if (State->Movement.IsValid())
-					{
-						State->Movement.Get()->*Property = State->Original;
-					}
-					State->Movement = Movement;
-					State->Original = Movement->*Property;
-					UE_LOG(LogChatControl, Log, TEXT("%s: %.2f -> %.2f"), *Slot, State->Original, State->Original * Multiplier);
+					Movement->Velocity.Z *= Multiplier;
 				}
-				const float Target = State->Original * Multiplier;
-				if (!FMath::IsNearlyEqual(Movement->*Property, Target))
-				{
-					Movement->*Property = Target;
-				}
+				*bWasFalling = bFalling;
 			},
-			[State, Property]
-			{
-				if (State->Movement.IsValid())
-				{
-					State->Movement.Get()->*Property = State->Original;
-				}
-			});
+			[] {});
 		Ctx.Subsystem->Announce(Message);
 		return true;
 	}
@@ -216,19 +249,19 @@ TMap<FString, FChatEffect> ChatEffects::CreateAll()
 
 	Add(TEXT("jump"), true, [](const FChatEffectContext& Ctx)
 	{
-		return ScaleMovementTemporarily(Ctx, TEXT("jump"), &UCharacterMovementComponent::JumpZVelocity, 2.5f,
+		return BoostJumpsTemporarily(Ctx, 2.5f,
 			FText::Format(LOCTEXT("Jump", "{0} gave you super jump for {1} s!"), FText::FromString(Ctx.ViewerName), FText::AsNumber(FMath::RoundToInt(Ctx.Settings->Duration))));
 	});
 
 	Add(TEXT("moon"), true, [](const FChatEffectContext& Ctx)
 	{
-		return ScaleMovementTemporarily(Ctx, TEXT("gravity"), &UCharacterMovementComponent::GravityScale, 0.25f,
+		return ScaleGravityTemporarily(Ctx, 0.25f,
 			FText::Format(LOCTEXT("Moon", "{0} switched on moon gravity for {1} s!"), FText::FromString(Ctx.ViewerName), FText::AsNumber(FMath::RoundToInt(Ctx.Settings->Duration))));
 	});
 
 	Add(TEXT("heavy"), true, [](const FChatEffectContext& Ctx)
 	{
-		return ScaleMovementTemporarily(Ctx, TEXT("gravity"), &UCharacterMovementComponent::GravityScale, 3.f,
+		return ScaleGravityTemporarily(Ctx, 3.f,
 			FText::Format(LOCTEXT("Heavy", "{0} made you heavy for {1} s!"), FText::FromString(Ctx.ViewerName), FText::AsNumber(FMath::RoundToInt(Ctx.Settings->Duration))));
 	});
 

@@ -543,12 +543,23 @@ AFGCharacterPlayer* UChatControlSubsystem::FindPlayer() const
 	{
 		return nullptr;
 	}
-	// Singleplayer: the only player character (also found while driving a vehicle)
+	// The character the local player controls
+	APlayerController* Controller = World->GetFirstPlayerController();
+	if (AFGCharacterPlayer* Character = Controller ? Cast<AFGCharacterPlayer>(Controller->GetPawn()) : nullptr)
+	{
+		return Character;
+	}
+	// While driving the controller possesses the vehicle; fall back to a locally controlled or the only character
+	AFGCharacterPlayer* Fallback = nullptr;
 	for (TActorIterator<AFGCharacterPlayer> It(World); It; ++It)
 	{
-		return *It;
+		if (It->IsLocallyControlled())
+		{
+			return *It;
+		}
+		Fallback = Fallback ? Fallback : *It;
 	}
-	return nullptr;
+	return Fallback;
 }
 
 #undef LOCTEXT_NAMESPACE
