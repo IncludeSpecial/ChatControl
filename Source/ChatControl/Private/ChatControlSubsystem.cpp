@@ -7,6 +7,7 @@
 #include "Configuration/ConfigManager.h"
 #include "FGChatManager.h"
 #include "FGCharacterPlayer.h"
+#include "Creature/FGCreature.h"
 #include "EngineUtils.h"
 #include "GameFramework/GameStateBase.h"
 #include "Buildables/FGBuildableTradingPost.h"
@@ -819,15 +820,27 @@ bool UChatControlSubsystem::SpawnPet(const FString& ViewerKey, const FString& Vi
 	}
 	FActorSpawnParameters Params;
 	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-	const FVector Location = Player->GetActorLocation() + Player->GetActorRightVector() * 250.f;
+	FVector Location = Player->GetActorLocation() + Player->GetActorRightVector() * 250.f;
+	FHitResult Ground;
+	FCollisionQueryParams Query(TEXT("ChatControlPet"), false, Player);
+	if (World->LineTraceSingleByChannel(Ground, Location + FVector(0, 0, 100.f), Location - FVector(0, 0, 500.f), ECC_Visibility, Query))
+	{
+		Location = Ground.ImpactPoint + FVector(0, 0, 60.f);
+	}
 	APawn* Pet = World->SpawnActor<APawn>(PetClass, Location, Player->GetActorRotation(), Params);
 	if (!Pet)
 	{
+		UE_LOG(LogChatControl, Warning, TEXT("Pet failed to spawn"));
 		return false;
 	}
 	if (!Pet->GetController())
 	{
 		Pet->SpawnDefaultController();
+	}
+	// Like other creatures, a pet without a spawner gets culled right away unless it is persistent
+	if (AFGCreature* Creature = Cast<AFGCreature>(Pet))
+	{
+		Creature->SetIsPersistent(true);
 	}
 	Pet->SetLifeSpan(FMath::Max(60.f, Settings.PetLifeSpanSeconds));
 	AttachNameTag(Pet, ViewerName, FColor(120, 255, 120), 120.f);
