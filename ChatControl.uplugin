@@ -1,0 +1,33 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1.0",
+	"SemVersion": "0.1.0",
+	"GameVersion": ">=513885",
+	"FriendlyName": "ChatControl",
+	"Description": "Let your Twitch chat play with you: viewers earn FICSIT Chips by watching and spend them on gifts and chaos. Works with channel points, bits, subs, raids - and even without viewers thanks to Auto-Chaos.",
+	"Category": "Gameplay",
+	"CreatedBy": "Switty",
+	"CreatedByURL": "https://www.twitch.tv/swittyids",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"CanContainContent": true,
+	"IsBetaVersion": true,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "ChatControl",
+			"Type": "Runtime",
+			"LoadingPhase": "PostDefault"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "SML",
+			"Enabled": true,
+			"SemVersion": "^3.12.0"
+		}
+	]
+}
