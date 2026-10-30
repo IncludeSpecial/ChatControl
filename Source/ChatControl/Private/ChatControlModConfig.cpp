@@ -214,7 +214,10 @@ void UChatControlModConfig::Register(UConfigManager* ConfigManager, const FChatC
 		Tr(TEXT("1 = easy: prices x1.5, half the creatures. 2 = normal. 3 = hardcore: prices x0.6, double creatures."),
 		   TEXT("1 = лёгкая: цены x1.5, существ вдвое меньше. 2 = обычная. 3 = хардкор: цены x0.6, существ вдвое больше.")));
 
-	// --- Twitch account ---
+	// --- Twitch account: hidden unless a Client ID was put into Settings.json (needs 2FA on Twitch) ---
+	const bool bTwitchAccount = !Defaults.TwitchClientId.IsEmpty();
+	if (bTwitchAccount)
+	{
 	UConfigPropertySection* TwitchAccount = AddSection(Root, TEXT("TwitchAccount"), Tr(TEXT("Twitch login (optional)"), TEXT("Вход в Twitch (необязательно)")));
 	AddString(TwitchAccount, TEXT("ClientId"), Defaults.TwitchClientId,
 		Tr(TEXT("Client ID"), TEXT("Client ID")),
@@ -232,6 +235,7 @@ void UChatControlModConfig::Register(UConfigManager* ConfigManager, const FChatC
 	AddBool(TwitchAccount, TEXT("Polls"), Defaults.bTwitchPolls,
 		Tr(TEXT("Votes as Twitch polls"), TEXT("Голосования через опросы Twitch")),
 		Tr(TEXT("Instead of !1 / !2 / !3 (Affiliate/Partner only)"), TEXT("Вместо !1 / !2 / !3 (только для компаньонов и партнёров)")));
+	}
 
 	// --- YouTube ---
 	UConfigPropertySection* YouTube = AddSection(Root, TEXT("YouTube"), (Tr(TEXT("YouTube chat"), TEXT("Чат YouTube"))));
@@ -310,10 +314,13 @@ void UChatControlModConfig::Register(UConfigManager* ConfigManager, const FChatC
 		AddBool(Row, TEXT("RandomPool"), Effect->bRandomPool,
 			Tr(TEXT("Random"), TEXT("В случайных")),
 			Tr(TEXT("Can be picked by votes, Auto-Chaos and the pot"), TEXT("Может выпасть в голосовании, автохаосе и копилке")));
-		AddInt(Row, TEXT("ChannelPoints"), Effect->ChannelPointsCost,
-			Tr(TEXT("Channel points"), TEXT("Баллы канала")),
-			Tr(TEXT("Price of the reward the mod creates on Twitch (needs Twitch login). 0 = no reward"),
-			   TEXT("Цена награды, которую мод создаст на Twitch (нужен вход в Twitch). 0 = без награды")));
+		if (bTwitchAccount)
+		{
+			AddInt(Row, TEXT("ChannelPoints"), Effect->ChannelPointsCost,
+				Tr(TEXT("Channel points"), TEXT("Баллы канала")),
+				Tr(TEXT("Price of the reward the mod creates on Twitch (needs Twitch login). 0 = no reward"),
+				   TEXT("Цена награды, которую мод создаст на Twitch (нужен вход в Twitch). 0 = без награды")));
+		}
 		if (Effect->DelayMax > 0.f || Effect->Amount > 0)
 		{
 			AddFloat(Row, TEXT("DelayMin"), Effect->DelayMin,

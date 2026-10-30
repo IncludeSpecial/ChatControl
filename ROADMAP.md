@@ -19,5 +19,10 @@
 - Twitch polls/predictions: need an OAuth token with write scopes
 - Publishing on GitHub and ficsit.app (needs Switty's GitHub account)
 
+## Dormant
+- Twitch login (follows, auto channel point rewards, native polls) is implemented but hidden: Twitch requires 2FA
+  to register an app and it did not work with Switty's phone number. Putting `TwitchClientId` into Settings.json
+  brings the menu section back.
+
 ## Dropped
 - Kick, Discord, `!order`, bets, multiplayer (decided 2026-10-31)
