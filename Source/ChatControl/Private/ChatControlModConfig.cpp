@@ -298,6 +298,14 @@ void UChatControlModConfig::Register(UConfigManager* ConfigManager, const FChatC
 	AddString(Games, TEXT("GoalEffect"), Defaults.GoalEffect, Tr(TEXT("Pot effect"), TEXT("Эффект копилки")));
 	AddInt(Games, TEXT("GoalChips"), Defaults.GoalChips, Tr(TEXT("Pot size (chips)"), TEXT("Размер копилки (чипы)")));
 
+	// --- OBS ---
+	UConfigPropertySection* Obs = AddSection(Root, TEXT("Obs"), Tr(TEXT("OBS overlay"), TEXT("Оверлей OBS")));
+	AddBool(Obs, TEXT("Enabled"), Defaults.bOverlayEnabled,
+		Tr(TEXT("Enabled"), TEXT("Включён")),
+		Tr(TEXT("Widgets in OBS read data from http://localhost:<port>/state. Changes apply after restart."),
+		   TEXT("Виджеты в OBS берут данные с http://localhost:<порт>/state. Применяется после перезапуска.")));
+	AddInt(Obs, TEXT("Port"), Defaults.OverlayPort, Tr(TEXT("Port"), TEXT("Порт")));
+
 	// --- Viewers in the world ---
 	UConfigPropertySection* Viewers = AddSection(Root, TEXT("Viewers"), Tr(TEXT("Viewers in the world"), TEXT("Зрители в мире")));
 	AddBool(Viewers, TEXT("PetOnSub"), Defaults.bPetOnSub,
@@ -397,6 +405,10 @@ bool UChatControlModConfig::ApplyTo(UConfigManager* ConfigManager, FChatControlS
 	bChanged |= Read<UConfigPropertyBool>(Games, TEXT("Goal"), Settings.bGoalEnabled);
 	bChanged |= Read<UConfigPropertyString>(Games, TEXT("GoalEffect"), Settings.GoalEffect);
 	bChanged |= Read<UConfigPropertyInteger>(Games, TEXT("GoalChips"), Settings.GoalChips);
+
+	const UConfigPropertySection* Obs = GetSection(Root, TEXT("Obs"));
+	bChanged |= Read<UConfigPropertyBool>(Obs, TEXT("Enabled"), Settings.bOverlayEnabled);
+	bChanged |= Read<UConfigPropertyInteger>(Obs, TEXT("Port"), Settings.OverlayPort);
 
 	const UConfigPropertySection* Viewers = GetSection(Root, TEXT("Viewers"));
 	bChanged |= Read<UConfigPropertyBool>(Viewers, TEXT("PetOnSub"), Settings.bPetOnSub);

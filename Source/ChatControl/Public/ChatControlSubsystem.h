@@ -8,6 +8,7 @@
 #include "ChatEconomy.h"
 #include "ChatEffects.h"
 #include "ChatControlSettings.h"
+#include "HttpRouteHandle.h"
 #include "ChatControlSubsystem.generated.h"
 
 class FTwitchIrcConnector;
@@ -106,6 +107,12 @@ private:
 	FText GetSessionSummary() const;
 	void SaveSessionSummary() const;
 
+	// OBS overlay (ChatControlOverlay.cpp)
+	void StartOverlay();
+	void StopOverlay();
+	void PushOverlayEvent(const FString& Text) const;
+	FString BuildOverlayJson() const;
+
 	void TickEconomy(double Now);
 	void TickChaosQueue(double Now);
 	void TickAutoChaos(double Now);
@@ -141,6 +148,12 @@ private:
 	TArray<FString> VoteOptions;
 	/** viewer key -> option index */
 	TMap<FString, int32> Votes;
+
+	TWeakPtr<class IHttpRouter> OverlayRouter;
+	FHttpRouteHandle OverlayRoute;
+	/** (id, text) of recent announcements for the overlay feed; mutable because Announce is const */
+	mutable TArray<TPair<int32, FString>> OverlayEvents;
+	mutable int32 OverlayEventCounter = 0;
 
 	double SessionStartTime = 0.0;
 	int32 SessionEffectCount = 0;

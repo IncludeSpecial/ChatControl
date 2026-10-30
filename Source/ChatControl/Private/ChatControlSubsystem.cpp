@@ -48,6 +48,7 @@ void UChatControlSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	NextVoteTime = Now + Settings.VoteIntervalMinutes * 60.0;
 
 	RestartConnectors();
+	StartOverlay();
 
 	bInitialized = true;
 	UE_LOG(LogChatControl, Log, TEXT("ChatControl initialized, settings: %s"), *FChatControlSettings::GetSettingsPath());
@@ -56,6 +57,7 @@ void UChatControlSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 void UChatControlSubsystem::Deinitialize()
 {
 	bInitialized = false;
+	StopOverlay();
 	// Destroying the connector stops and joins its thread before IncomingEvents goes away
 	Twitch.Reset();
 	for (auto& Pair : TimedEffects)
@@ -169,6 +171,7 @@ void UChatControlSubsystem::Tick(float DeltaTime)
 void UChatControlSubsystem::Announce(const FText& Message) const
 {
 	UE_LOG(LogChatControl, Log, TEXT("%s"), *Message.ToString());
+	PushOverlayEvent(Message.ToString());
 	UWorld* World = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr;
 	if (AFGChatManager* Chat = World ? AFGChatManager::Get(World) : nullptr)
 	{

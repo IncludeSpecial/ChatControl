@@ -79,6 +79,11 @@ struct FChatControlSettings
 	UPROPERTY() FString GoalEffect = TEXT("boss");
 	UPROPERTY() int32 GoalChips = 1000;
 
+	// --- OBS overlay ---
+	UPROPERTY() bool bOverlayEnabled = true;
+	/** Widgets read http://localhost:<port>/state */
+	UPROPERTY() int32 OverlayPort = 8787;
+
 	// --- Raids ---
 	/** One ambush per this many raiders */
 	UPROPERTY() int32 RaidViewersPerAmbush = 5;
