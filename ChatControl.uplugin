@@ -1,8 +1,8 @@
 {
 	"FileVersion": 3,
 	"Version": 0,
-	"VersionName": "0.1.1",
-	"SemVersion": "0.1.1",
+	"VersionName": "0.1.2",
+	"SemVersion": "0.1.2",
 	"GameVersion": ">=513885",
 	"FriendlyName": "ChatControl",
 	"Description": "Let your Twitch and YouTube chat play with you: viewers earn FICSIT Chips in chat and spend them on gifts, creatures and chaos. Auto-Chaos keeps it going even when chat is quiet.",

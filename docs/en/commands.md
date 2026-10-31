@@ -1,0 +1,123 @@
+# Commands and effects
+
+[Setup](setup.md) · [Settings](settings.md) · [FAQ](faq.md) · [На русском](../ru/commands.md)
+
+Commands are typed in Twitch or YouTube chat. Answers appear in the game chat and in the OBS event feed.
+
+## Everyone
+
+| Command | What it does |
+|---|---|
+| `!chips` / `!чипы` | Your chip balance and rank |
+| `!daily` / `!бонус` | Daily chip bonus, once per calendar day |
+| `!effects`, `!help` | All enabled effects with current prices |
+| `!1` `!2` `!3`, `!vote N` / `!голос N` | Vote during a chat vote (free, gives a few chips) |
+| `!pot N` / `!копилка N` | Put N chips into the shared pot; a full pot runs a big effect for everyone |
+| `!top` / `!топ` | Top viewers by chips spent |
+| `!stats` / `!статистика` | Stats of the current session |
+
+## Effects
+
+Prices are the defaults at difficulty 2 with one active viewer. They grow by 5% per extra active viewer (up to x3)
+and change with difficulty. `!effects` shows the current prices. Every number below can be changed in the settings.
+
+**Harmful** effects go through the chaos queue: they respect the chaos budget, `!pause`, death protection
+and (for creatures) the safe zone around the HUB, so they may run a little later.
+
+### Free
+| Command | Effect |
+|---|---|
+| `!hi` | Waves at the streamer |
+| `!gift` | Half a stack of a basic resource (iron, wire, concrete...) |
+
+### Gifts and help
+| Command | Price | Effect |
+|---|---|---|
+| `!biggift` | 150 | Half a stack of an advanced part (rotors, motors, computers...) |
+| `!rain` | 100 | Supply crate with 5 stacks in front of the streamer |
+| `!sink` | 300 | AWESOME Sink coupon |
+| `!heal` | 80 | Full health |
+| `!dance` | 40 | Freezes all creatures within 50 m for 6 s |
+| `!day` | 60 | Sets the time to noon |
+
+### Viewers in the world
+| Command | Price | Effect |
+|---|---|---|
+| `!sign <text>` | 20 | A floating sign with the viewer's name and text, stays for 10 min |
+| `!pet` | 100 | The viewer's own lizard doggo with their name; 50% chance it is already tame |
+| `!name` | 200 | Signs the machine or vehicle the streamer is looking at (or the nearest one). Stays in the save; one per viewer |
+
+### Chaos: player (harmful)
+| Command | Price | Effect |
+|---|---|---|
+| `!jump` | 30 | Super jump for 20 s |
+| `!moon` | 50 | Moon gravity for 30 s |
+| `!heavy` | 60 | Heavy gravity for 20 s |
+| `!speed` | 40 | Everything the player does is faster for 20 s |
+| `!slow` | 50 | Slow motion for 20 s |
+| `!fov` | 40 | Camera warp for 30 s |
+| `!fly` | 60 | Lifts the player 8 m into the air for 15 s, then a soft landing |
+| `!shrink` | 50 | Tiny player for 30 s |
+| `!giant` | 50 | Giant player for 30 s |
+| `!teleport` | 100 | Teleport to a random spot about 80 m away |
+| `!hub` | 150 | Teleport back to the HUB |
+| `!night` | 60 | Sets the time to midnight |
+| `!fog` | 60 | Thick fog for 60 s |
+
+### Chaos: survival (harmful)
+| Command | Price | Effect |
+|---|---|---|
+| `!hungry` | 80 | Health drains for 60 s until the streamer eats something; never goes below 10% |
+| `!inventory` | 100 | Shuffles the inventory slots |
+| `!drop` | 120 | 3 random stacks fall out into a crate about 20 m away |
+
+### Chaos: factory (harmful)
+| Command | Price | Effect |
+|---|---|---|
+| `!strike` | 120 | 5 random machines stop for 60 s |
+| `!underclock` | 120 | 10 random machines run at half speed for 60 s |
+| `!blackout` | 200 | All generators stop for 15 s |
+
+### Chaos: creatures (harmful)
+| Command | Price | Effect |
+|---|---|---|
+| `!ambush` | 80 | 3 enemies appear around the streamer after a 3-5 s warning |
+| `!boss` | 300 | An alpha monster after a 3-5 s warning |
+
+Creatures carry the viewer's name and rank, leave after 5 minutes and never spawn near the HUB.
+
+## Streamer and moderators
+
+| Command | What it does |
+|---|---|
+| `!pause` | Pauses harmful effects (they wait in the queue). Again to resume |
+| `!panic` | Cancels everything: queue, timed effects, creatures, signs |
+| `!clear [nick]` / `!убрать [nick]` | Removes all signs, or only the signs of that viewer |
+
+## Streamer only
+
+| Command | What it does |
+|---|---|
+| `!test <effect> [text]` | Runs any effect for free, e.g. `!test boss`, `!test sign hello` |
+| `!test chips N` | Gives you N chips |
+| `!test bits N`, `!test sub`, `!test gifts N`, `!test raid N` | Simulates bits, a sub, gifted subs, a raid |
+| `!test welcome` | Shows the greeting new viewers get |
+| `!test autochaos` | ADA triggers a random effect now |
+| `!test <command>` | Runs an ordinary command, e.g. `!test clear`, `!test daily` |
+
+## What happens on its own
+
+| Event | Result |
+|---|---|
+| Chatting | 10 chips every 5 minutes for everyone who wrote in the last 15 minutes |
+| First message in a session | +20 chips and a greeting with the viewer's name and fireworks next to the streamer |
+| Bits | 2 chips per bit; a command in the cheer message runs right away |
+| Super Chat / Super Sticker | 5 chips per currency unit; a command in the message runs right away |
+| Sub, resub, new membership | 500 chips and the viewer's pet, which stays on the base |
+| Gifted subs / memberships | 500 chips per gift to the gifter |
+| Raid | One ambush per 5 raiders (up to 5), plus a boss for 30+ raiders |
+| Every 10 minutes | A chat vote between three effects for 60 s |
+| Quiet chat for 10 minutes | Auto-Chaos: ADA triggers a random effect |
+| Spending chips | Ranks: Pioneer, Engineer (200), Senior Engineer (1000), Project Lead (3000), FICSIT Director (10000) |
+
+Name tags are colored by chat role: streamer red, moderators cyan, VIP pink, subscribers purple.
