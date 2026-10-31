@@ -591,7 +591,15 @@ void UChatControlSubsystem::HandleTestCommand(const FChatEvent& Event, const FSt
 	}
 	else if (const FChatEffect* Effect = Effects.Find(What))
 	{
-		ExecuteEffect(*Effect, Event.GetEconomyKey(), Event.DisplayName);
+		ExecuteEffect(*Effect, Event.GetEconomyKey(), Event.DisplayName, AmountText);
+	}
+	else if (static const TSet<FString> ChatCommands = { TEXT("chips"), TEXT("чипы"), TEXT("daily"), TEXT("бонус"), TEXT("effects"), TEXT("help"),
+		TEXT("pause"), TEXT("panic"), TEXT("clear"), TEXT("убрать"), TEXT("vote"), TEXT("голос"), TEXT("pot"), TEXT("копилка"),
+		TEXT("top"), TEXT("топ"), TEXT("stats"), TEXT("статистика"), TEXT("1"), TEXT("2"), TEXT("3") }; ChatCommands.Contains(What))
+	{
+		// "!test clear" and the like: ordinary commands just run as if typed without !test
+		Fake.Text = TEXT("!") + What + (AmountText.IsEmpty() ? FString() : TEXT(" ") + AmountText);
+		HandleCommand(Fake);
 	}
 	else
 	{
