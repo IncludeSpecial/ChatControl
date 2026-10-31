@@ -1,0 +1,64 @@
+<!doctype html>
+<!--
+  Лента событий ChatControl (мод Satisfactory): кто что запустил, донаты, рейды, голосования.
+  Источник OBS «Браузер», адрес http://localhost:8787/obs/feed.html, размер 560×600. Работает, пока запущена игра с модом.
+  Новые события появляются сверху и сами исчезают через SHOW_MS.
+-->
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>ChatControl лента</title>
+<style>
+  @font-face { font-family: "MB"; src: url("assets/fonts/Montserrat-Black.ttf"), local("Montserrat Black"), local("Arial Black"); }
+  @font-face { font-family: "MBold"; src: url("assets/fonts/Montserrat-Bold.ttf"), local("Montserrat Bold"), local("Segoe UI Bold"), local("Arial Bold"); }
+  :root { --red: #ff2a4a; --cyan: #19e3ff; }
+  html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
+  #feed { position: absolute; left: 10px; right: 10px; top: 10px; display: flex; flex-direction: column; gap: 10px; }
+  .card { position: relative; padding: 14px 18px 14px 20px; background: rgba(12,11,12,.88); border-left: 6px solid var(--red);
+          box-shadow: 0 8px 28px rgba(0,0,0,.5); font: 21px/1.3 "MBold", sans-serif; color: rgba(255,255,255,.94);
+          animation: in .45s steps(1) 1, out .6s ease-in forwards; animation-delay: 0s, var(--life); }
+  .card::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px;
+                 background: linear-gradient(90deg, var(--red), var(--cyan)); transform-origin: left;
+                 animation: bar var(--life) linear forwards; }
+  .card.boss { border-left-color: var(--cyan); }
+  @keyframes bar { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+  @keyframes in {
+    0%  { transform: translateX(-14px) skewX(-8deg); clip-path: inset(0 0 55% 0); opacity: .8; }
+    25% { transform: translateX(16px); clip-path: inset(45% 0 0 0); }
+    50% { transform: translateX(-6px) skewX(6deg); filter: hue-rotate(90deg); }
+    75% { transform: none; opacity: .6; filter: none; }
+  }
+  @keyframes out { to { opacity: 0; transform: translateX(-30px); } }
+</style>
+</head>
+<body>
+  <div id="feed"></div>
+<script src="assets/chatcontrol.js"></script>
+<script>
+  // ↓↓↓ настройки
+  const SHOW_MS = 12000;   // сколько держится одно событие
+  const MAX_CARDS = 5;     // сколько событий видно одновременно
+
+  document.documentElement.style.setProperty("--life", SHOW_MS + "ms");
+  const feed = document.getElementById("feed");
+  ccZoom(feed);
+  let lastId = null;
+
+  ccPoll(state => {
+    if (!state) return;
+    const events = state.events || [];
+    if (lastId === null) { lastId = events.length ? events[events.length - 1].id : 0; return; } // старое не показываем
+    for (const e of events) {
+      if (e.id <= lastId) continue;
+      lastId = e.id;
+      const card = document.createElement("div");
+      card.className = "card" + (/БОСС|BOSS|ПАНИКА|PANIC/.test(e.text) ? " boss" : "");
+      card.textContent = e.text;
+      feed.prepend(card);
+      setTimeout(() => card.remove(), SHOW_MS + 700);
+      while (feed.children.length > MAX_CARDS) feed.lastChild.remove();
+    }
+  });
+</script>
+</body>
+</html>

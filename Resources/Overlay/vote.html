@@ -1,0 +1,61 @@
+<!doctype html>
+<!--
+  Голосование чата ChatControl (мод Satisfactory). Появляется только во время голосования.
+  Источник OBS «Браузер», адрес http://localhost:8787/obs/vote.html, размер 760×330.
+  Зрители голосуют в чате командами !1, !2, !3.
+-->
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>ChatControl голосование</title>
+<style>
+  @font-face { font-family: "MB"; src: url("assets/fonts/Montserrat-Black.ttf"), local("Montserrat Black"), local("Arial Black"); }
+  @font-face { font-family: "MBold"; src: url("assets/fonts/Montserrat-Bold.ttf"), local("Montserrat Bold"), local("Segoe UI Bold"), local("Arial Bold"); }
+  :root { --red: #ff2a4a; --cyan: #19e3ff; }
+  html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
+  .box { position: absolute; left: 10px; top: 10px; width: 720px; padding: 18px 24px 22px; background: rgba(12,11,12,.9);
+         border-left: 6px solid var(--red); box-shadow: 0 8px 28px rgba(0,0,0,.5);
+         transition: opacity .4s, transform .4s; }
+  .box.hidden { opacity: 0; transform: translateX(-30px); }
+  .head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px; }
+  .title { font: 30px/1 "MB", sans-serif; color: #fff; letter-spacing: 2px; text-shadow: -2px 0 var(--red), 2px 0 var(--cyan); }
+  .timer { font: 26px/1 "MB", sans-serif; color: var(--cyan); }
+  .opt { position: relative; height: 54px; margin-top: 10px; background: rgba(255,255,255,.06); overflow: hidden; }
+  .fill { position: absolute; inset: 0 auto 0 0; width: 0; background: linear-gradient(90deg, rgba(255,42,74,.75), rgba(25,227,255,.55));
+          transition: width .5s ease; }
+  .opt.lead .fill { background: linear-gradient(90deg, var(--red), var(--cyan)); }
+  .row { position: relative; height: 100%; display: flex; align-items: center; gap: 16px; padding: 0 16px;
+         font: 24px/1 "MBold", sans-serif; color: #fff; }
+  .key { font: 24px/1 "MB", sans-serif; color: var(--cyan); min-width: 44px; }
+  .name { flex: 1; }
+  .count { font: 24px/1 "MB", sans-serif; }
+  .progress { height: 4px; margin-top: 16px; background: linear-gradient(90deg, var(--red), var(--cyan)); transform-origin: left; }
+</style>
+</head>
+<body>
+  <div class="box hidden" id="box">
+    <div class="head"><div class="title">ГОЛОСОВАНИЕ ЧАТА</div><div class="timer" id="timer"></div></div>
+    <div id="opts"></div>
+    <div class="progress" id="progress"></div>
+  </div>
+<script src="assets/chatcontrol.js"></script>
+<script>
+  const box = document.getElementById("box");
+  ccZoom(box);
+  ccPoll(state => {
+    const vote = state && state.vote;
+    box.classList.toggle("hidden", !(vote && vote.active));
+    if (!vote || !vote.active) return;
+    const total = vote.options.reduce((s, o) => s + o.votes, 0);
+    const best = Math.max(0, ...vote.options.map(o => o.votes));
+    document.getElementById("opts").innerHTML = vote.options.map((o, i) => `
+      <div class="opt ${o.votes && o.votes === best ? "lead" : ""}">
+        <div class="fill" style="width:${total ? o.votes / total * 100 : 0}%"></div>
+        <div class="row"><span class="key">!${i + 1}</span><span class="name">${ccName(o.effect)}</span><span class="count">${o.votes}</span></div>
+      </div>`).join("");
+    document.getElementById("timer").textContent = Math.ceil(vote.secondsLeft) + " с";
+    document.getElementById("progress").style.transform = `scaleX(${vote.duration ? vote.secondsLeft / vote.duration : 0})`;
+  }, 500);
+</script>
+</body>
+</html>

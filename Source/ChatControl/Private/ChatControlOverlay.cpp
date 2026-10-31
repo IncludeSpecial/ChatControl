@@ -14,6 +14,7 @@
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Misc/ConfigCacheIni.h"
+#include "Interfaces/IPluginManager.h"
 
 void UChatControlSubsystem::StartOverlay()
 {
@@ -79,7 +80,9 @@ FString UChatControlSubsystem::GetOverlayFolder() const
 	FString Folder = Settings.OverlayFolder.TrimStartAndEnd().TrimQuotes();
 	if (Folder.IsEmpty())
 	{
-		Folder = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("ChatControl"), TEXT("Overlay"));
+		// The widgets shipped with the mod
+		const TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(TEXT("ChatControl"));
+		Folder = Plugin ? FPaths::Combine(Plugin->GetBaseDir(), TEXT("Resources"), TEXT("Overlay")) : FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("ChatControl"), TEXT("Overlay"));
 	}
 	return FPaths::ConvertRelativePathToFull(Folder);
 }

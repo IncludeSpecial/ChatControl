@@ -43,7 +43,7 @@ public class ChatControl : ModuleRules
 
 		// Chat connectors. Only modules shipped with the game can be used here (no WebSockets).
 		PrivateDependencyModuleNames.AddRange(new string[] {
-			"Sockets", "HTTPServer", "HTTP"
+			"Sockets", "HTTPServer", "HTTP", "Projects"
 		});
 	}
 }

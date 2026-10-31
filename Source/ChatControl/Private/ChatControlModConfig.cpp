@@ -167,6 +167,7 @@ namespace
 		{ TEXT("giant"),   TEXT("Movement"),  TEXT("!giant - giant player (strength = size)"), TEXT("!giant - великан (сила = размер)") },
 		{ TEXT("hungry"),  TEXT("Survival"),  TEXT("!hungry - health drains until you eat (strength = HP per 2 s)"), TEXT("!hungry - здоровье тает, пока не поешь (сила = HP за 2 с)") },
 		{ TEXT("inventory"), TEXT("Survival"), TEXT("!inventory - shuffle the inventory"), TEXT("!inventory - перемешать инвентарь") },
+		{ TEXT("drop"),    TEXT("Survival"),  TEXT("!drop - items fall out into a crate far away (count = stacks, strength = meters)"), TEXT("!drop - вещи вылетают в ящик вдалеке (количество = стаки, сила = метры)") },
 		{ TEXT("fog"),     TEXT("World"),     TEXT("!fog - thick fog (strength = density)"), TEXT("!fog - густой туман (сила = плотность)") },
 		{ TEXT("dance"),   TEXT("Help"),      TEXT("!dance - freeze nearby creatures (strength = radius, m)"), TEXT("!dance - заморозить существ рядом (сила = радиус, м)") },
 		{ TEXT("heal"),    TEXT("Help"),      TEXT("!heal - full health"),       TEXT("!heal - полное здоровье") },
@@ -376,8 +377,8 @@ void UChatControlModConfig::Register(UConfigManager* ConfigManager, const FChatC
 	AddInt(Obs, TEXT("Port"), Defaults.OverlayPort, Tr(TEXT("Port"), TEXT("Порт")));
 	AddString(Obs, TEXT("Folder"), Defaults.OverlayFolder,
 		Tr(TEXT("Widget folder"), TEXT("Папка виджетов")),
-		Tr(TEXT("Files from this folder open in OBS as http://localhost:<port>/obs/<file>. Empty = Saved/ChatControl/Overlay."),
-		   TEXT("Файлы из этой папки открываются в OBS как http://localhost:<порт>/obs/<файл>. Пусто = Saved/ChatControl/Overlay.")));
+		Tr(TEXT("Empty = widgets that come with the mod: http://localhost:<port>/obs/feed.html, vote.html, pot.html. Or a folder with your own widgets."),
+		   TEXT("Пусто = виджеты из мода: http://localhost:<порт>/obs/feed.html, vote.html, pot.html. Или папка со своими виджетами.")));
 
 	// --- Viewers in the world ---
 	UConfigPropertySection* Viewers = AddSection(Root, TEXT("Viewers"), Tr(TEXT("Viewers in the world"), TEXT("Зрители в мире")));

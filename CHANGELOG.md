@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+- New effect `!drop`: a few stacks fall out of the inventory into a crate about 20 m away
+- OBS widgets now come with the mod: `http://localhost:8787/obs/feed.html`, `vote.html`, `pot.html` (setup in the README)
+- `!hungry` ends only when you actually eat; natural regeneration no longer cancels it
+- `!test` also runs ordinary commands (`!test clear`, `!test daily`) and passes text to effects (`!test sign hi`)
+- The OBS web server is reachable from this PC only
+
 ## 0.1.1
 First public release.
 

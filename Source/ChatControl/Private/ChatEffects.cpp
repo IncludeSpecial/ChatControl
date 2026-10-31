@@ -887,6 +887,58 @@ TMap<FString, FChatEffect> ChatEffects::CreateAll()
 		return true;
 	});
 
+	Add(TEXT("drop"), true, [](const FChatEffectContext& Ctx)
+	{
+		UFGInventoryComponent* Inventory = Ctx.Player->GetInventory();
+		if (!Inventory || Inventory->IsEmpty())
+		{
+			return false;
+		}
+		TArray<int32> Filled;
+		for (int32 i = 0; i < Inventory->GetSizeLinear(); ++i)
+		{
+			FInventoryStack Stack;
+			if (Inventory->GetStackFromIndex(i, Stack) && Stack.HasItems())
+			{
+				Filled.Add(i);
+			}
+		}
+		// Amount = stacks that fall out; Strength = how far away the crate lands (m)
+		TArray<FInventoryStack> Dropped;
+		for (int32 n = 0; n < FMath::Max(1, Ctx.Settings->Amount) && Filled.Num() > 0; ++n)
+		{
+			const int32 Index = Filled[FMath::RandRange(0, Filled.Num() - 1)];
+			Filled.Remove(Index);
+			FInventoryStack Stack;
+			Inventory->GetStackFromIndex(Index, Stack);
+			Inventory->RemoveAllFromIndex(Index);
+			Dropped.Add(Stack);
+		}
+		const float Distance = FMath::Max(3.f, Ctx.Settings->Strength) * 100.f;
+		const float Angle = FMath::FRandRange(0.f, 2.f * PI);
+		FVector Location = Ctx.Player->GetActorLocation() + FVector(FMath::Cos(Angle), FMath::Sin(Angle), 0.f) * FMath::FRandRange(Distance * 0.75f, Distance * 1.25f);
+		FHitResult Ground;
+		FCollisionQueryParams Params(TEXT("ChatControlDrop"), false, Ctx.Player);
+		if (Ctx.World->LineTraceSingleByChannel(Ground, Location + FVector(0, 0, 3000.f), Location - FVector(0, 0, 6000.f), ECC_Visibility, Params))
+		{
+			Location = Ground.ImpactPoint + FVector(0, 0, 50.f);
+		}
+		AFGCrate* Crate = nullptr;
+		AFGItemPickup_Spawnable::SpawnInventoryCrate(Ctx.World, Dropped, Location, { Ctx.Player }, Crate, EFGCrateType::CT_DismantleCrate);
+		if (!Crate)
+		{
+			// Never lose the player's things: put them back
+			for (const FInventoryStack& Stack : Dropped)
+			{
+				Inventory->AddStack(Stack, true);
+			}
+			return false;
+		}
+		Ctx.Subsystem->Announce(FText::Format(Tr(TEXT("{0} knocked {1} stacks out of your pockets! The crate landed about {2} m away."), TEXT("{0} вытряхивает из карманов стаков: {1}! Ящик улетел примерно на {2} м.")),
+			FText::FromString(Ctx.ViewerName), FText::AsNumber(Dropped.Num()), FText::AsNumber(FMath::RoundToInt(FVector::Dist(Location, Ctx.Player->GetActorLocation()) / 100.f))));
+		return true;
+	});
+
 	Add(TEXT("fog"), true, [](const FChatEffectContext& Ctx)
 	{
 		UChatControlSubsystem* Subsystem = Ctx.Subsystem;

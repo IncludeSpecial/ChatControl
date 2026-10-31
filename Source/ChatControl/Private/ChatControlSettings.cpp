@@ -61,6 +61,8 @@ void FChatControlSettings::AddMissingEffectDefaults()
 		// hungry Strength = HP lost every 2 s until the player eats; fog Strength = fog density
 		{ TEXT("hungry"),   MakeEffect(80,  120.f, 300.f, 60.f, 2, 3.f) },
 		{ TEXT("inventory"), MakeEffect(100, 180.f, 600.f, 0.f, 2) },
+		// drop: Amount = stacks that fall out into a crate, Strength = how far it lands (m)
+		{ TEXT("drop"),     MakeEffect(120, 180.f, 600.f, 0.f,  2, 20.f, 3) },
 		{ TEXT("fog"),      MakeEffect(60,  120.f, 300.f, 60.f, 1, 0.2f) },
 		// Help: dance Strength = radius (m)
 		{ TEXT("dance"),    MakeEffect(40,  60.f,  120.f, 6.f,  0, 50.f) },

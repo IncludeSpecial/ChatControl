@@ -16,7 +16,7 @@
 
 ## Not possible or postponed
 - `!overclock` above 100%: the game requires power shards, so `!underclock` is used instead
-- `!drop`, inverted controls: no reliable game API found yet
+- Inverted controls: no reliable game API found yet
 - `!conveyor` (slow belts): belt speed is baked into the game's conveyor chains and cannot be changed at runtime
 - Rain: rain is visual-only blueprint weather without a C++ switch; `!fog` covers bad weather
 - Twitch follows and all channel point rewards: need a WebSocket client (the game does not ship one)
