@@ -377,8 +377,8 @@ void UChatControlModConfig::Register(UConfigManager* ConfigManager, const FChatC
 	AddInt(Obs, TEXT("Port"), Defaults.OverlayPort, Tr(TEXT("Port"), TEXT("Порт")));
 	AddString(Obs, TEXT("Folder"), Defaults.OverlayFolder,
 		Tr(TEXT("Widget folder"), TEXT("Папка виджетов")),
-		Tr(TEXT("Empty = widgets that come with the mod: http://localhost:<port>/obs/feed.html, vote.html, pot.html. Or a folder with your own widgets."),
-		   TEXT("Пусто = виджеты из мода: http://localhost:<порт>/obs/feed.html, vote.html, pot.html. Или папка со своими виджетами.")));
+		Tr(TEXT("A folder with your own widgets, opened as http://localhost:<port>/obs/<file>. The built-in feed.html, vote.html and pot.html work either way."),
+		   TEXT("Папка со своими виджетами, они открываются как http://localhost:<порт>/obs/<файл>. Встроенные feed.html, vote.html и pot.html работают в любом случае.")));
 
 	// --- Viewers in the world ---
 	UConfigPropertySection* Viewers = AddSection(Root, TEXT("Viewers"), Tr(TEXT("Viewers in the world"), TEXT("Зрители в мире")));

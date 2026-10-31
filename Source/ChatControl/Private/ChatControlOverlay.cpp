@@ -12,6 +12,7 @@
 #include "Serialization/JsonSerializer.h"
 #include "GenericPlatform/GenericPlatformHttp.h"
 #include "Misc/FileHelper.h"
+#include "HAL/FileManager.h"
 #include "Misc/Paths.h"
 #include "Misc/ConfigCacheIni.h"
 #include "Interfaces/IPluginManager.h"
@@ -60,7 +61,7 @@ void UChatControlSubsystem::StartOverlay()
 		}));
 	OverlayRouter = Router;
 	FHttpServerModule::Get().StartAllListeners();
-	UE_LOG(LogChatControl, Log, TEXT("Overlay: http://localhost:%d/state, widgets from %s"), Settings.OverlayPort, *GetOverlayFolder());
+	UE_LOG(LogChatControl, Log, TEXT("Overlay: http://localhost:%d/state, widgets from %s"), Settings.OverlayPort, *FString::Join(GetOverlayFolders(), TEXT(" + ")));
 }
 
 void UChatControlSubsystem::StopOverlay()
@@ -75,30 +76,61 @@ void UChatControlSubsystem::StopOverlay()
 	OverlayRouter.Reset();
 }
 
-FString UChatControlSubsystem::GetOverlayFolder() const
+TArray<FString> UChatControlSubsystem::GetOverlayFolders() const
 {
-	FString Folder = Settings.OverlayFolder.TrimStartAndEnd().TrimQuotes();
-	if (Folder.IsEmpty())
+	// The streamer's own folder first, then the widgets shipped with the mod, so both sets of URLs keep working
+	TArray<FString> Folders;
+	const FString Custom = Settings.OverlayFolder.TrimStartAndEnd().TrimQuotes();
+	if (!Custom.IsEmpty())
 	{
-		// The widgets shipped with the mod
-		const TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(TEXT("ChatControl"));
-		Folder = Plugin ? FPaths::Combine(Plugin->GetBaseDir(), TEXT("Resources"), TEXT("Overlay")) : FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("ChatControl"), TEXT("Overlay"));
+		Folders.Add(FPaths::ConvertRelativePathToFull(Custom));
 	}
-	return FPaths::ConvertRelativePathToFull(Folder);
+	if (const TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(TEXT("ChatControl")))
+	{
+		Folders.Add(FPaths::ConvertRelativePathToFull(FPaths::Combine(Plugin->GetBaseDir(), TEXT("Resources"), TEXT("Overlay"))));
+	}
+	for (FString& Folder : Folders)
+	{
+		FPaths::NormalizeDirectoryName(Folder);
+	}
+	return Folders;
 }
 
 TUniquePtr<FHttpServerResponse> UChatControlSubsystem::ServeOverlayFile(const FString& RelativePath) const
 {
-	const FString Folder = GetOverlayFolder();
-	FString Path = FPaths::ConvertRelativePathToFull(FPaths::Combine(Folder, FGenericPlatformHttp::UrlDecode(RelativePath)));
-	FPaths::NormalizeFilename(Path);
-	FString Root = Folder;
-	FPaths::NormalizeDirectoryName(Root);
+	const FString Requested = FGenericPlatformHttp::UrlDecode(RelativePath);
+	FString Path;
 	TArray<uint8> Bytes;
-	// Only files inside the widget folder, never "../" outside it
-	if (!Path.StartsWith(Root + TEXT("/")) || !FFileHelper::LoadFileToArray(Bytes, *Path, FILEREAD_Silent))
+	for (const FString& Folder : GetOverlayFolders())
 	{
-		return FHttpServerResponse::Error(EHttpServerResponseCodes::NotFound);
+		Path = FPaths::ConvertRelativePathToFull(FPaths::Combine(Folder, Requested));
+		FPaths::NormalizeFilename(Path);
+		// Only files inside the widget folder, never "../" outside it
+		if (Path.StartsWith(Folder + TEXT("/")) && FFileHelper::LoadFileToArray(Bytes, *Path, FILEREAD_Silent))
+		{
+			break;
+		}
+		Bytes.Reset();
+	}
+	if (Bytes.Num() == 0)
+	{
+		// A readable page instead of an empty JSON error: what was asked for and which widgets exist
+		FString Page = TEXT("<!doctype html><meta charset=\"utf-8\"><body style=\"background:#111;color:#eee;font:16px sans-serif;padding:16px\">");
+		Page += TEXT("<h2>ChatControl: widget not found</h2><p>") + FGenericPlatformHttp::HtmlEncode(Requested) + TEXT("</p><p>Available widgets:</p><ul>");
+		for (const FString& Folder : GetOverlayFolders())
+		{
+			TArray<FString> Files;
+			IFileManager::Get().FindFiles(Files, *FPaths::Combine(Folder, TEXT("*.html")), true, false);
+			for (const FString& File : Files)
+			{
+				const FString Url = TEXT("/obs/") + FGenericPlatformHttp::UrlEncode(File).Replace(TEXT("+"), TEXT("%20"));
+				Page += FString::Printf(TEXT("<li><a style=\"color:#19e3ff\" href=\"%s\">%s</a></li>"), *Url, *FGenericPlatformHttp::HtmlEncode(File));
+			}
+		}
+		Page += TEXT("</ul></body>");
+		TUniquePtr<FHttpServerResponse> NotFound = FHttpServerResponse::Create(Page, TEXT("text/html; charset=utf-8"));
+		NotFound->Code = EHttpServerResponseCodes::NotFound;
+		return NotFound;
 	}
 	static const TMap<FString, FString> Types = {
 		{ TEXT("html"), TEXT("text/html; charset=utf-8") }, { TEXT("js"), TEXT("text/javascript; charset=utf-8") },

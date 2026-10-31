@@ -129,7 +129,8 @@ private:
 	void StopOverlay();
 	void PushOverlayEvent(const FString& Text) const;
 	FString BuildOverlayJson() const;
-	FString GetOverlayFolder() const;
+	/** The streamer's widget folder (if set), then the widgets shipped with the mod */
+	TArray<FString> GetOverlayFolders() const;
 	TUniquePtr<struct FHttpServerResponse> ServeOverlayFile(const FString& RelativePath) const;
 
 	void TickEconomy(double Now);
