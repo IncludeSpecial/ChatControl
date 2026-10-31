@@ -1,44 +1,39 @@
 <!doctype html>
 <!--
-  Копилка чата и топ зрителей ChatControl (мод Satisfactory).
-  Источник OBS «Браузер», адрес http://localhost:8787/obs/pot.html, размер 640×330.
-  Зрители скидываются командой !pot <сколько>; топ — по потраченным чипам за всё время.
+  ChatControl shared pot and top viewers.
+  OBS: Sources -> + -> Browser, URL http://localhost:8787/obs/pot.html, size 640x330 (Local file unchecked).
 -->
-<html lang="ru">
+<html>
 <head>
 <meta charset="utf-8">
-<title>ChatControl копилка и топ</title>
+<title>ChatControl pot</title>
+<link rel="stylesheet" href="assets/ficsit.css">
 <style>
-  @font-face { font-family: "MB"; src: url("assets/fonts/Montserrat-Black.ttf"), local("Montserrat Black"), local("Arial Black"); }
-  @font-face { font-family: "MBold"; src: url("assets/fonts/Montserrat-Bold.ttf"), local("Montserrat Bold"), local("Segoe UI Bold"), local("Arial Bold"); }
-  :root { --red: #ff2a4a; --cyan: #19e3ff; }
-  html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
-  .box { position: absolute; left: 10px; top: 10px; width: 600px; padding: 18px 22px 20px; background: rgba(12,11,12,.88);
-         border-left: 6px solid var(--red); box-shadow: 0 8px 28px rgba(0,0,0,.5); transition: opacity .4s; }
+  .box { position: absolute; left: 10px; top: 10px; width: 600px; padding: 22px 22px 18px; transition: opacity .4s; }
   .box.offline { opacity: 0; }
-  .label { font: 16px/1 "MBold", sans-serif; letter-spacing: 5px; color: rgba(255,255,255,.65); text-transform: uppercase; }
-  .pot { display: flex; justify-content: space-between; align-items: baseline; margin: 10px 0 10px; }
-  .goal { font: 30px/1 "MB", sans-serif; color: #fff; text-shadow: -2px 0 var(--red), 2px 0 var(--cyan); }
-  .nums { font: 24px/1 "MB", sans-serif; color: var(--cyan); }
-  .bar { height: 14px; background: rgba(255,255,255,.08); }
-  .bar div { height: 100%; width: 0; background: linear-gradient(90deg, var(--red), var(--cyan)); transition: width .6s ease; }
+  .pot { display: flex; justify-content: space-between; align-items: baseline; margin: 10px 0; }
+  .goal { font-size: 30px; }
+  .nums { font-size: 24px; font-weight: 700; color: var(--orange); }
+  .bar { height: 16px; background: var(--panel-light); }
+  .bar div { height: 100%; width: 0; transition: width .6s ease;
+             background: repeating-linear-gradient(-45deg, var(--orange) 0 12px, var(--orange-dark) 12px 24px); }
   .top { margin-top: 18px; display: flex; flex-direction: column; gap: 8px; }
-  .row { display: flex; gap: 14px; font: 22px/1 "MBold", sans-serif; color: #fff; }
-  .row .n { font-family: "MB"; color: var(--red); width: 30px; }
+  .row { display: flex; gap: 14px; font-size: 22px; font-weight: 600; }
+  .row .n { font-weight: 700; color: var(--orange); width: 30px; }
   .row .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .row .chips { color: var(--cyan); }
-  .hint { margin-top: 14px; font: 16px/1 "MBold", sans-serif; color: rgba(255,255,255,.5); }
+  .row .chips { color: var(--orange); font-weight: 700; }
+  .hint { margin-top: 14px; font-size: 15px; font-weight: 600; color: var(--muted); }
 </style>
 </head>
 <body>
-  <div class="box offline" id="box">
+  <div class="box plate offline" id="box">
     <div id="potBlock">
-      <div class="label">Копилка чата</div>
-      <div class="pot"><div class="goal" id="goal"></div><div class="nums" id="nums"></div></div>
+      <div class="caption" id="label"></div>
+      <div class="pot"><div class="goal title" id="goal"></div><div class="nums" id="nums"></div></div>
       <div class="bar"><div id="fill"></div></div>
     </div>
     <div class="top" id="top"></div>
-    <div class="hint">!pot &lt;чипы&gt; — скинуться · !chips — баланс · !effects — что можно</div>
+    <div class="hint" id="hint"></div>
   </div>
 <script src="assets/chatcontrol.js"></script>
 <script>
@@ -49,11 +44,13 @@
     if (!state) return;
     const pot = state.pot;
     document.getElementById("potBlock").style.display = pot.enabled ? "" : "none";
-    document.getElementById("goal").innerHTML = "на " + ccName(pot.effect);
+    document.getElementById("label").textContent = ccT("pot");
+    document.getElementById("goal").innerHTML = ccT("potFor") + " " + ccName(pot.effect);
     document.getElementById("nums").textContent = `${pot.current} / ${pot.goal}`;
     document.getElementById("fill").style.width = Math.min(100, pot.goal ? pot.current / pot.goal * 100 : 0) + "%";
     document.getElementById("top").innerHTML = (state.top || []).slice(0, 3).map((t, i) =>
       `<div class="row"><span class="n">${i + 1}</span><span class="name">${ccEsc(t.name)}</span><span class="chips">${ccEsc(t.chips)}</span></div>`).join("");
+    document.getElementById("hint").textContent = ccT("hint");
   }, 2000);
 </script>
 </body>

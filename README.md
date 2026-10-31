@@ -52,8 +52,8 @@ Add each one in OBS as **Sources -> + -> Browser**, uncheck **Local file**, past
 - The widgets are empty while the game is not running; they reconnect by themselves once it starts.
 - Add `?k=1.4` to a URL to make a widget bigger (any number works).
 - Do not use **Local file** in OBS: OBS blocks local pages from reading the game data.
-- Own design: put your HTML files into any folder and set it in **Mods -> ChatControl -> OBS overlay -> Widget folder**; they open as `http://localhost:8787/obs/<file>`. Live data is at `/state` (JSON).
-- The widgets look best with the free [Montserrat](https://fonts.google.com/specimen/Montserrat) font installed (Black and Bold); without it a system font is used.
+- The widgets have a neutral FICSIT look and speak the mod's language (English or Russian).
+- Own design: copy the files from [`Resources/Overlay`](Resources/Overlay) into any folder, change colors in `assets/ficsit.css` or anything else, and set the folder in **Mods -> ChatControl -> OBS overlay -> Widget folder**. Files from your folder open as `http://localhost:8787/obs/<file>`; the built-in ones keep working. Live data is at `/state` (JSON).
 - Port in use? Change it in the same settings section and in the URLs.
 
 ## Files
@@ -91,5 +91,5 @@ Add each one in OBS as **Sources -> + -> Browser**, uncheck **Local file**, past
 - Без запущенной игры виджеты пустые и сами оживают, когда игра запустится.
 - `?k=1.4` в конце адреса делает виджет крупнее (подойдёт любое число).
 - Не включай **Локальный файл**: OBS не даёт локальным страницам читать данные игры.
-- Свой дизайн: положи HTML-файлы в любую папку и укажи её в **Моды -> ChatControl -> Оверлей OBS -> Папка виджетов**. Данные лежат по адресу `/state` (JSON).
-- Лучше всего виджеты смотрятся с бесплатным шрифтом [Montserrat](https://fonts.google.com/specimen/Montserrat) (Black и Bold), без него будет системный шрифт.
+- Виджеты в нейтральном стиле FICSIT и подписаны на языке мода (русский или английский).
+- Свой дизайн: скопируй файлы из [`Resources/Overlay`](Resources/Overlay) в любую папку, поменяй цвета в `assets/ficsit.css` или что угодно ещё и укажи папку в **Моды -> ChatControl -> Оверлей OBS -> Папка виджетов**. Файлы из твоей папки открываются как `http://localhost:8787/obs/<файл>`, встроенные продолжают работать. Данные лежат по адресу `/state` (JSON).

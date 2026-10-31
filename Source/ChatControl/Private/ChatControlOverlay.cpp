@@ -2,6 +2,7 @@
 // and http://localhost:<port>/obs/<file> serves the widget files themselves.
 #include "ChatControlSubsystem.h"
 #include "ChatControl.h"
+#include "ChatText.h"
 #include "Twitch/TwitchIrcConnector.h"
 #include "YouTube/YouTubeChatConnector.h"
 #include "HttpServerModule.h"
@@ -217,6 +218,8 @@ FString UChatControlSubsystem::BuildOverlayJson() const
 	Chaos->SetBoolField(TEXT("connected"), Twitch.IsValid() && Twitch->IsConnected());
 	Chaos->SetBoolField(TEXT("youtube"), YouTube.IsValid() && YouTube->IsConnected());
 	Root->SetObjectField(TEXT("chaos"), Chaos);
+	// Built-in widgets label themselves in the mod language
+	Root->SetStringField(TEXT("language"), ChatText::IsRussian() ? TEXT("ru") : TEXT("en"));
 
 	FString Out;
 	const TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Out);
