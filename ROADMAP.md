@@ -21,7 +21,6 @@
 - Rain: rain is visual-only blueprint weather without a C++ switch; `!fog` covers bad weather
 - Twitch follows and all channel point rewards: need a WebSocket client (the game does not ship one)
 - Twitch polls/predictions: need an OAuth token with write scopes
-- Publishing on GitHub and ficsit.app (needs Switty's GitHub account)
 
 ## Dormant
 - Twitch login (follows, auto channel point rewards, native polls) is implemented but hidden: Twitch requires 2FA

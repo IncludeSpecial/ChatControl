@@ -49,7 +49,7 @@ struct FChatControlSettings
 	UPROPERTY() FString Language = TEXT("auto");
 
 	// --- Twitch ---
-	UPROPERTY() FString TwitchChannel = TEXT("swittyids");
+	UPROPERTY() FString TwitchChannel;
 	/** Chat logins to ignore (bots) */
 	UPROPERTY() TArray<FString> IgnoredUsers = { TEXT("nightbot"), TEXT("streamelements"), TEXT("streamlabs"), TEXT("moobot"), TEXT("fossabot") };
 
