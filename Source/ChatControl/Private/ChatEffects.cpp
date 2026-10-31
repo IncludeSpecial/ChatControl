@@ -18,6 +18,7 @@
 #include "Camera/PlayerCameraManager.h"
 #include "ChatText.h"
 #include "FGHealthComponent.h"
+#include "Resources/FGConsumableDescriptor.h"
 #include "Components/ExponentialHeightFogComponent.h"
 #include "UObject/UObjectIterator.h"
 
@@ -359,6 +360,29 @@ namespace
 			[] {});
 		Ctx.Subsystem->Announce(Message);
 		return true;
+	}
+}
+
+namespace
+{
+	/** Berries, nuts, mushrooms and medicine across all of the player's inventories, including the hand slot */
+	int32 CountFood(const AActor* Player)
+	{
+		int32 Count = 0;
+		TInlineComponentArray<UFGInventoryComponent*> Inventories(Player);
+		for (const UFGInventoryComponent* Inventory : Inventories)
+		{
+			TArray<FInventoryStack> Stacks;
+			Inventory->GetInventoryStacks(Stacks);
+			for (const FInventoryStack& Stack : Stacks)
+			{
+				if (Stack.Item.GetItemClass() && Stack.Item.GetItemClass()->IsChildOf(UFGConsumableDescriptor::StaticClass()))
+				{
+					Count += Stack.NumItems;
+				}
+			}
+		}
+		return Count;
 	}
 }
 
@@ -783,12 +807,14 @@ TMap<FString, FChatEffect> ChatEffects::CreateAll()
 		}
 		UChatControlSubsystem* Subsystem = Ctx.Subsystem;
 		const float Damage = FMath::Max(0.5f, Ctx.Settings->Strength);
-		TSharedRef<float> LastHealth = MakeShared<float>(Health->GetCurrentHealth());
+		// Health only goes down: natural regeneration is pushed back. Eating is noticed by food leaving the player's
+		// inventories (backpack and hand slot). Never kills: stops at 10%.
+		TSharedRef<float> Allowed = MakeShared<float>(Health->GetCurrentHealth());
+		TSharedRef<int32> Food = MakeShared<int32>(CountFood(Ctx.Player));
 		TSharedRef<double> NextBite = MakeShared<double>(FPlatformTime::Seconds() + 2.0);
 		TSharedRef<bool> bFed = MakeShared<bool>(false);
-		// Health drops every 2 s; eating (berries, nuts, medicine) ends the hunger. Never kills: stops at 10%.
 		Subsystem->StartTimedEffect(TEXT("hungry"), Ctx.Settings->Duration,
-			[Subsystem, Damage, LastHealth, NextBite, bFed]
+			[Subsystem, Damage, Allowed, Food, NextBite, bFed]
 			{
 				AFGCharacterPlayer* Player = Subsystem->FindPlayer();
 				UFGHealthComponent* Health = Player ? Player->GetHealthComponent() : nullptr;
@@ -796,22 +822,31 @@ TMap<FString, FChatEffect> ChatEffects::CreateAll()
 				{
 					return;
 				}
-				const float Current = Health->GetCurrentHealth();
-				// Natural regeneration trickles in; food and medicine heal in one jump
-				if (Current > *LastHealth + 4.f)
+				const int32 FoodNow = CountFood(Player);
+				if (FoodNow < *Food)
 				{
 					*bFed = true;
 					Subsystem->Announce(Tr(TEXT("You ate something - the hunger is gone."), TEXT("Ты поел(а) - голод прошёл.")));
 					return;
 				}
-				const double Now = FPlatformTime::Seconds();
+				*Food = FoodNow;
 				const float Floor = Health->GetMaxHealth() * 0.1f;
-				if (Now >= *NextBite && Current > Floor)
+				const double Now = FPlatformTime::Seconds();
+				if (Now >= *NextBite)
 				{
 					*NextBite = Now + 2.0;
-					Health->TakeDamage(Player, FMath::Min(Damage, Current - Floor), GetDefault<UDamageType>(), nullptr, nullptr);
+					*Allowed = FMath::Max(Floor, *Allowed - Damage);
 				}
-				*LastHealth = Health->GetCurrentHealth();
+				const float Current = Health->GetCurrentHealth();
+				if (Current > *Allowed + 0.01f)
+				{
+					Health->TakeDamage(Player, Current - *Allowed, GetDefault<UDamageType>(), nullptr, nullptr);
+				}
+				else
+				{
+					// Took damage from something else: hunger continues from there
+					*Allowed = Current;
+				}
 			},
 			[] {});
 		Subsystem->Announce(FText::Format(Tr(TEXT("{0} made you starving! Eat something to stop it."), TEXT("{0} морит тебя голодом! Съешь что-нибудь, чтобы это прекратить.")),
