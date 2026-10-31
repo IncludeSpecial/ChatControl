@@ -13,12 +13,23 @@
 #include "GenericPlatform/GenericPlatformHttp.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "Misc/ConfigCacheIni.h"
 
 void UChatControlSubsystem::StartOverlay()
 {
 	if (!Settings.bOverlayEnabled || Settings.OverlayPort <= 0)
 	{
 		return;
+	}
+	// The game's engine config binds HTTP listeners to "any"; keep this one on this PC only, not the local network
+	static const TCHAR* ListenerSection = TEXT("HTTPServer.Listeners");
+	TArray<FString> Overrides;
+	GConfig->GetArray(ListenerSection, TEXT("ListenerOverrides"), Overrides, GEngineIni);
+	const FString LocalOnly = FString::Printf(TEXT("(Port=%d,BindAddress=localhost)"), Settings.OverlayPort);
+	if (!Overrides.Contains(LocalOnly))
+	{
+		Overrides.Insert(LocalOnly, 0);
+		GConfig->SetArray(ListenerSection, TEXT("ListenerOverrides"), Overrides, GEngineIni);
 	}
 	TSharedPtr<IHttpRouter> Router = FHttpServerModule::Get().GetHttpRouter(Settings.OverlayPort, false);
 	if (!Router)
