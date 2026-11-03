@@ -136,9 +136,21 @@ void UChatControlSubsystem::TickConfig(double Now)
 	const FString OldYouTube = Settings.YouTubeApiKey + Settings.YouTubeChannel;
 	const FString OldClientId = Settings.TwitchClientId;
 	const bool bWasEnabled = Settings.bEnabled;
-	if (!UChatControlModConfig::ApplyTo(ConfigManager, Settings))
+	const int32 OldPort = Settings.OverlayPort;
+	const bool bOverlayWasEnabled = Settings.bOverlayEnabled;
+	bool bPortRejected = false;
+	if (!UChatControlModConfig::ApplyTo(ConfigManager, Settings, &bPortRejected))
 	{
 		return;
+	}
+	if (bPortRejected)
+	{
+		Announce(FText::Format(Tr(TEXT("That OBS port can't be used. Back to {0}."), TEXT("Такой порт для OBS использовать нельзя. Вернул {0}.")), FText::AsNumber(Settings.OverlayPort, &FNumberFormattingOptions::DefaultNoGrouping())));
+	}
+	if (Settings.OverlayPort != OldPort || Settings.bOverlayEnabled != bOverlayWasEnabled)
+	{
+		StopOverlay();
+		StartOverlay();
 	}
 	Settings.Save();
 	ChatText::SetLanguage(Settings.Language);
@@ -272,6 +284,7 @@ void UChatControlSubsystem::Tick(float DeltaTime)
 	TickEconomy(Now);
 	TickTimedEffects(Now);
 	TickDelayedActions(Now);
+	TickBoss(Now);
 	TickVotes(Now);
 	TickNameTags();
 	TickChaosQueue(Now);
@@ -420,7 +433,12 @@ void UChatControlSubsystem::HandleEvent(const FChatEvent& Event)
 				ChaosQueue.Add({ TEXT("ambush"), Key, Event.DisplayName, 0 });
 			}
 		}
-		if (Settings.RaidBossMinViewers > 0 && Event.Amount >= Settings.RaidBossMinViewers && IsEnabled(TEXT("boss")))
+		// Big raids bring a titan, medium ones a boss
+		if (Settings.RaidTitanMinViewers > 0 && Event.Amount >= Settings.RaidTitanMinViewers && IsEnabled(TEXT("titan")))
+		{
+			ChaosQueue.Add({ TEXT("titan"), Key, Event.DisplayName, 0 });
+		}
+		else if (Settings.RaidBossMinViewers > 0 && Event.Amount >= Settings.RaidBossMinViewers && IsEnabled(TEXT("boss")))
 		{
 			ChaosQueue.Add({ TEXT("boss"), Key, Event.DisplayName, 0 });
 		}
@@ -1082,6 +1100,7 @@ void UChatControlSubsystem::Panic()
 	}
 	SpawnedActors.Empty();
 	Signs.Empty();
+	EndBossFight(false);
 	Announce(FText::Format(Tr(TEXT("PANIC! Chaos cancelled: {0} queued effects, {1} creatures removed."),
 		TEXT("ПАНИКА! Хаос отменён: убрано {0} эффектов из очереди и {1} существ.")), FText::AsNumber(Removed), FText::AsNumber(Creatures)));
 }

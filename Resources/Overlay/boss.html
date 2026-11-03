@@ -1,0 +1,57 @@
+<!doctype html>
+<!--
+  ChatControl titan fight: boss name, who summoned it, health bar and stage. Visible only during a fight.
+  OBS: Sources -> + -> Browser, URL http://localhost:8787/obs/boss.html, size 760x190 (Local file unchecked).
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<title>ChatControl titan</title>
+<link rel="stylesheet" href="assets/ficsit.css">
+<style>
+  .box { position: absolute; left: 10px; top: 10px; width: 720px; padding: 22px 24px 18px; transition: opacity .4s, transform .4s; }
+  .box.hidden { opacity: 0; transform: translateY(-20px); }
+  .box.peaceful { border-left-color: #5ad86a; }
+  .head { display: flex; justify-content: space-between; align-items: baseline; }
+  .name { font-size: 30px; }
+  .stage { font-size: 22px; font-weight: 700; color: var(--orange); white-space: nowrap; }
+  .who { margin: 6px 0 12px; font-size: 18px; font-weight: 600; color: var(--muted); }
+  .bar { position: relative; height: 26px; background: var(--panel-light); overflow: hidden; }
+  .fill { height: 100%; width: 100%; transition: width .4s ease;
+          background: repeating-linear-gradient(-45deg, #e5484d 0 14px, #b8343a 14px 28px); }
+  .box.peaceful .fill { background: repeating-linear-gradient(-45deg, #5ad86a 0 14px, #3fa64d 14px 28px); }
+  .pct { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; }
+</style>
+</head>
+<body>
+  <div class="box plate hidden" id="box">
+    <div class="head"><div class="name title" id="name"></div><div class="stage" id="stage"></div></div>
+    <div class="who" id="who"></div>
+    <div class="bar"><div class="fill" id="fill"></div><div class="pct" id="pct"></div></div>
+  </div>
+<script src="assets/chatcontrol.js"></script>
+<script>
+  const box = document.getElementById("box");
+  ccZoom(box);
+  ccPoll(state => {
+    const boss = state && state.boss;
+    box.classList.toggle("hidden", !(boss && boss.active));
+    if (!boss || !boss.active) return;
+    box.classList.toggle("peaceful", !!boss.peaceful);
+    const ru = ccLang === "ru";
+    document.getElementById("name").textContent = boss.name;
+    document.getElementById("who").textContent = (ru ? "призвал(а) " : "summoned by ") + boss.viewer;
+    if (boss.arriving) {
+      document.getElementById("stage").textContent = ru ? "ПРИБЛИЖАЕТСЯ" : "INCOMING";
+      document.getElementById("fill").style.width = "100%";
+      document.getElementById("pct").textContent = "";
+      return;
+    }
+    const pct = boss.maxHealth ? Math.max(0, Math.ceil(boss.health / boss.maxHealth * 100)) : 0;
+    document.getElementById("stage").textContent = (ru ? "СТАДИЯ " : "STAGE ") + boss.stage + "/3";
+    document.getElementById("fill").style.width = pct + "%";
+    document.getElementById("pct").textContent = pct + "%";
+  }, 500);
+</script>
+</body>
+</html>

@@ -386,6 +386,31 @@ namespace
 	}
 }
 
+bool ChatEffects::FindCreatureSpot(UWorld* World, const AActor* Player, const FChatControlSettings& Settings, float Radius, float HalfHeight, FVector& OutLocation)
+{
+	return FindSpawnPoint(World, Player, Settings, Radius, HalfHeight, OutLocation);
+}
+
+bool ChatEffects::DropLootCrate(UWorld* World, AActor* Player, const FVector& Location, int32 Stacks, float AdvancedShare)
+{
+	TArray<FInventoryStack> Items;
+	for (int32 i = 0; i < FMath::Max(1, Stacks); ++i)
+	{
+		const bool bAdvanced = FMath::FRand() < AdvancedShare;
+		const TCHAR* Path = bAdvanced ? AdvancedGiftPool[FMath::RandRange(0, UE_ARRAY_COUNT(AdvancedGiftPool) - 1)] : BasicGiftPool[FMath::RandRange(0, UE_ARRAY_COUNT(BasicGiftPool) - 1)];
+		if (TSubclassOf<UFGItemDescriptor> ItemClass = LoadClass<UFGItemDescriptor>(nullptr, Path))
+		{
+			Items.Add(FInventoryStack(UFGItemDescriptor::GetStackSize(ItemClass), ItemClass));
+		}
+	}
+	AFGCrate* Crate = nullptr;
+	if (Items.Num() > 0)
+	{
+		AFGItemPickup_Spawnable::SpawnInventoryCrate(World, Items, Location, { Player }, Crate, EFGCrateType::CT_DismantleCrate);
+	}
+	return Crate != nullptr;
+}
+
 TMap<FString, FChatEffect> ChatEffects::CreateAll()
 {
 	TMap<FString, FChatEffect> Effects;
@@ -885,6 +910,12 @@ TMap<FString, FChatEffect> ChatEffects::CreateAll()
 		}
 		Ctx.Subsystem->Announce(FText::Format(Tr(TEXT("{0} shuffled your inventory!"), TEXT("{0} перемешивает твой инвентарь!")), FText::FromString(Ctx.ViewerName)));
 		return true;
+	});
+
+	Add(TEXT("titan"), true, [](const FChatEffectContext& Ctx)
+	{
+		// Args picks a boss for testing: "!test titan crabs"
+		return Ctx.Subsystem->StartTitan(Ctx.ViewerKey, Ctx.ViewerName, *Ctx.Settings, Ctx.Args.TrimStartAndEnd());
 	});
 
 	Add(TEXT("drop"), true, [](const FChatEffectContext& Ctx)

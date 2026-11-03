@@ -3,7 +3,7 @@
 [Setup](setup.md) · [Commands](commands.md) · [FAQ](faq.md) · [На русском](../ru/settings.md)
 
 Everything is set in the game: **Mods -> ChatControl**. Changes apply within a second, no restart needed
-(except the OBS port and the language of the settings page). Default values are in brackets.
+(except the language of the settings page). Default values are in brackets.
 
 ## Main
 - **Mod enabled** (on) - turns all chat effects on or off.
@@ -45,10 +45,10 @@ Grouped by kind. Every effect has its own block:
 
 ## Chat games
 - **Votes** (on), **Vote every (min)** (10), **Vote lasts (s)** (60), **Chips for voting** (5).
-- **Shared pot** (on), **Pot effect** (`boss`), **Pot size** (1000) - viewers fill it with `!pot N`; when full, the effect runs.
+- **Shared pot** (on), **Pot effect** (`titan` on new installs, `boss` before 0.1.3), **Pot size** (1000) - viewers fill it with `!pot N`; when full, the effect runs.
 
 ## OBS overlay
-- **Enabled** (on), **Port** (8787, applies after restart).
+- **Enabled** (on), **Port** (8787, 1024-65535, applies at once; an invalid port is reset to 8787, a busy one falls back to 8787).
 - **Widget folder** (empty) - a folder with your own widgets. The built-in `feed.html`, `vote.html`, `pot.html` work either way.
 
 ## Viewers in the world
@@ -62,8 +62,12 @@ Grouped by kind. Every effect has its own block:
 - **Name color by chat role** (on) and the colors (hex): streamer `#FF2A4A`, moderators `#19E3FF`, VIP `#FF6AD5`,
   subscribers and members `#B57BFF`. Viewers without a role keep the usual color.
 
-## Raids
-- **1 ambush per N raiders** (5), **Max ambushes** (5), **Boss from N raiders** (30, 0 = never).
+## Raids and titans
+- **1 ambush per N raiders** (5), **Max ambushes** (5), **Boss from N raiders** (30, 0 = never), **Titan from N raiders** (60, 0 = never).
+- **Titan defeated: chips per active viewer** (50), **Titan won: chips for the summoner** (200).
+- **Peaceful loot titans** (on) - giant giraffes, beetles and striders that drop loot.
+- The titan's own block in **Effects** sets its price, **Strength** (health multiplier, 1 = normal), **Count** (max traits),
+  **Duration** (time limit of the fight) and the warning delay.
 
 ## Advanced
 - **Chaos budget per minute** (4) - chaos points harmful effects may use per minute; the rest waits in the queue.

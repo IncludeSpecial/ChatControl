@@ -80,6 +80,11 @@ public:
 	FString GetTagText(const FString& ViewerName) const;
 	/** Puts the viewer's name over the machine the player looks at (or the nearest one); kept in the save */
 	bool NameBuilding(const FString& ViewerKey, const FString& ViewerName);
+	/**
+	 * Starts a titan fight: a random boss (or BossId) with random traits, three stages and a health bar.
+	 * False while another fight runs or near the HUB, so the request waits in the chaos queue.
+	 */
+	bool StartTitan(const FString& ViewerKey, const FString& ViewerName, const FChatEffectSettings& Effect, const FString& BossId);
 
 private:
 	struct FPendingChaos
@@ -181,6 +186,8 @@ private:
 	TWeakPtr<class IHttpRouter> OverlayRouter;
 	FHttpRouteHandle OverlayRoute;
 	FHttpRouteHandle OverlayFilesRoute;
+	/** Ports this game already listens on (the HTTP server keeps listeners open after routes are removed) */
+	TSet<int32> OverlayPorts;
 	/** (id, text) of recent announcements for the overlay feed; mutable because Announce is const */
 	mutable TArray<TPair<int32, FString>> OverlayEvents;
 	mutable int32 OverlayEventCounter = 0;
@@ -213,6 +220,39 @@ private:
 	void ApplyWorldData();
 	void SaveWorldData();
 	FChatWorldMark& FindOrAddMark(TArray<FChatWorldMark>& Marks, const FString& ViewerKey, const FString& ViewerName);
+
+	// Titans (ChatControlBoss.cpp)
+	struct FBossFight
+	{
+		bool bActive = false;
+		/** Between the warning and the spawn */
+		bool bArriving = false;
+		int32 Type = 0;
+		uint32 Traits = 0;
+		FString Title;
+		FString ViewerKey;
+		FString ViewerName;
+		TWeakObjectPtr<APawn> Boss;
+		TWeakObjectPtr<class UFGHealthComponent> Health;
+		float MaxHealth = 1.f;
+		float LastHealth = 0.f;
+		float PlayerLastHealth = 0.f;
+		float BaseDilation = 1.f;
+		int32 Stage = 1;
+		int32 SpawnTries = 0;
+		double EndTime = 0.0;
+		double LastDamageTime = 0.0;
+		double NextSummonTime = 0.0;
+		double NextRegenTime = 0.0;
+	};
+	FBossFight BossFight;
+	void SpawnTitan();
+	void TickBoss(double Now);
+	void EnterBossStage(int32 Stage);
+	int32 SummonMinions(int32 Count);
+	void EndBossFight(bool bDestroyBoss);
+	void AttachBossBar(APawn* Boss);
+	TSharedPtr<class FJsonObject> BuildBossJson() const;
 
 	FChatWorldData WorldData;
 	FString WorldDataPath;

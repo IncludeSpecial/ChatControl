@@ -52,6 +52,7 @@ In OBS: **Sources -> + -> Browser**, uncheck **Local file**, paste the URL and s
 | Event feed: who triggered what, raids, subs | `http://localhost:8787/obs/feed.html` | 560 x 600 |
 | Vote (visible only while a vote runs) | `http://localhost:8787/obs/vote.html` | 760 x 330 |
 | Shared pot and top viewers | `http://localhost:8787/obs/pot.html` | 640 x 330 |
+| Titan fight: boss, health bar, stage (visible only during a fight) | `http://localhost:8787/obs/boss.html` | 760 x 190 |
 
 - Without the game the widgets are empty; they come alive by themselves once the game starts.
 - `?k=1.4` at the end of a URL makes a widget bigger (any number works).

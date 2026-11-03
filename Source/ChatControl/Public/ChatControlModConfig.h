@@ -24,7 +24,8 @@ public:
 	static void Register(UConfigManager* ConfigManager, const FChatControlSettings& Defaults);
 
 	/** Copies values from the live config into Settings. Returns true if anything changed. */
-	static bool ApplyTo(UConfigManager* ConfigManager, FChatControlSettings& Settings);
+	/** bOutPortRejected is set when the OBS port in the menu was invalid and got reset to the default */
+	static bool ApplyTo(UConfigManager* ConfigManager, FChatControlSettings& Settings, bool* bOutPortRejected = nullptr);
 
 	static FConfigId GetId();
 };

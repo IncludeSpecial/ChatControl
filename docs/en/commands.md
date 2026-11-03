@@ -12,7 +12,7 @@ Commands are typed in Twitch or YouTube chat. Answers appear in the game chat an
 | `!daily` / `!бонус` | Daily chip bonus, once per calendar day |
 | `!effects`, `!help` | All enabled effects with current prices |
 | `!1` `!2` `!3`, `!vote N` / `!голос N` | Vote during a chat vote (free, gives a few chips) |
-| `!pot N` / `!копилка N` | Put N chips into the shared pot; a full pot runs a big effect for everyone |
+| `!pot N` / `!копилка N` | Put N chips into the shared pot; a full pot summons a titan (on new installs) |
 | `!top` / `!топ` | Top viewers by chips spent |
 | `!stats` / `!статистика` | Stats of the current session |
 
@@ -86,6 +86,22 @@ and (for creatures) the safe zone around the HUB, so they may run a little later
 
 Creatures carry the viewer's name and rank, leave after 5 minutes and never spawn near the HUB.
 
+### Titans (harmful)
+| Command | Price | Effect |
+|---|---|---|
+| `!titan` | 1000 | A boss fight after a 5-8 s warning: a random boss with 1-2 random traits, three stages and a health bar |
+
+**Bosses:** Hog King, Cliff Tyrant, Nuclear Hog (its minions explode), Stinger Queen and Stinger Lord (swarms),
+Green, Fire, Sand and Deep Matriarch (spitters of other elements, night and fog), Crab Mother (hatches crabs all the time),
+and peaceful loot titans - Sky Giraffe, Colossal Beetle, Giant Strider - that do not attack but drop loot at every stage.
+
+**Traits:** Armored (more health), Swift (faster), Colossal (bigger), Undying (heals when left alone), Summoning (minions every 30 s),
+Nocturnal (night), Misty (fog), Sparking (blackout at stage 2), Bloodthirsty (heals when it hits you), Rabid (faster as it gets hurt).
+
+**Stages:** at 66% the boss gets angry and calls help, at 33% it goes all in. One titan at a time; another one waits in the queue.
+**Victory:** a loot crate and 50 chips for every active viewer. **Defeat:** the summoner gets 200 chips. After 5 minutes the titan leaves.
+`!boss` stays a quick alpha monster without a fight.
+
 ## Streamer and moderators
 
 | Command | What it does |
@@ -99,6 +115,7 @@ Creatures carry the viewer's name and rank, leave after 5 minutes and never spaw
 | Command | What it does |
 |---|---|
 | `!test <effect> [text]` | Runs any effect for free, e.g. `!test boss`, `!test sign hello` |
+| `!test titan <boss>` | A titan fight with a chosen boss: `hogking`, `cliff`, `nuclear`, `queen`, `stinger`, `green`, `fire`, `sand`, `deep`, `crabs`, `giraffe`, `beetle`, `strider` |
 | `!test chips N` | Gives you N chips |
 | `!test bits N`, `!test sub`, `!test gifts N`, `!test raid N` | Simulates bits, a sub, gifted subs, a raid |
 | `!test welcome` | Shows the greeting new viewers get |
@@ -115,7 +132,7 @@ Creatures carry the viewer's name and rank, leave after 5 minutes and never spaw
 | Super Chat / Super Sticker | 5 chips per currency unit; a command in the message runs right away |
 | Sub, resub, new membership | 500 chips and the viewer's pet, which stays on the base |
 | Gifted subs / memberships | 500 chips per gift to the gifter |
-| Raid | One ambush per 5 raiders (up to 5), plus a boss for 30+ raiders |
+| Raid | One ambush per 5 raiders (up to 5), plus a boss for 30+ raiders or a titan for 60+ |
 | Every 10 minutes | A chat vote between three effects for 60 s |
 | Quiet chat for 10 minutes | Auto-Chaos: ADA triggers a random effect |
 | Spending chips | Ranks: Pioneer, Engineer (200), Senior Engineer (1000), Project Lead (3000), FICSIT Director (10000) |

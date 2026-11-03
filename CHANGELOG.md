@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.1.3
+
+### New
+- **Titans (`!titan`)**: a real boss fight instead of a single monster.
+  - 13 bosses with their own fights: Hog King, Cliff Tyrant, Nuclear Hog, Stinger Queen, Stinger Lord, four Spitter Matriarchs
+    (green, fire, sand, deep), Crab Mother, and peaceful loot titans (Sky Giraffe, Colossal Beetle, Giant Strider).
+  - 10 random traits that change the fight and the name: Armored, Swift, Colossal, Undying, Summoning, Nocturnal, Misty,
+    Sparking, Bloodthirsty, Rabid.
+  - Bigger size, many times more health, three stages (at 66% and 33%) with rage, minions, swarms, night and fog.
+  - Health bar, stage and the summoner's name above the boss, and a new OBS widget `http://localhost:8787/obs/boss.html`.
+  - Victory drops a loot crate and pays every active viewer; if the titan wins, the summoner gets chips.
+  - Default goal of the shared pot for new installs; raids with 60+ viewers bring a titan. `!test titan <boss>` picks a boss.
+- **OBS port** applies at once, without restarting the game.
+
+### Fixed
+- An invalid OBS port (below 1024, e.g. a typo like `1`) is reset to 8787, in the menu and on load.
+- If the chosen OBS port is taken by another program, the widgets fall back to 8787.
+
+
 ## 0.1.2
 
 ### New

@@ -29,13 +29,14 @@ Twitch needs no token or login. YouTube is optional and needs a free API key.
 - **Chat**: Twitch (anonymous, no token) and YouTube live chat (free API key), both at once.
 - **FICSIT Chips**: for chatting, the first message, a daily bonus, bits, Super Chats, subs and memberships.
   Prices grow with the number of active viewers. Chips are kept between streams.
-- **32 effects**: free ones, gifts and help, player chaos, survival, factory sabotage and creatures. See [the full list](docs/en/commands.md).
+- **33 effects**: free ones, gifts and help, player chaos, survival, factory sabotage and creatures. See [the full list](docs/en/commands.md).
 - **Viewers in the world**: name tags with ranks and role colors, greetings with fireworks, signs, named machines and vehicles,
   pets for subscribers that stay in your save.
 - **Chat games**: votes, a shared chip pot for a big effect, top viewers, ranks.
-- **Raids** bring ambushes, big raids a boss.
+- **Titans**: boss fights with 13 bosses, random traits, three stages, a health bar and loot.
+- **Raids** bring ambushes, big raids a boss or a titan.
 - **Safety**: chaos budget, cooldowns, death protection, a safe zone around the HUB, `!pause`, `!panic`, `!clear`.
-- **OBS widgets** built in: event feed, vote, pot and top viewers.
+- **OBS widgets** built in: event feed, vote, pot and top viewers, titan fight.
 - **Everything is configurable** in the game, in English and Russian.
 
 ## Good to know

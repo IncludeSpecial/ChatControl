@@ -69,9 +69,11 @@ void FChatControlSettings::AddMissingEffectDefaults()
 		{ TEXT("heal"),     MakeEffect(80,  120.f, 300.f, 0.f,  0) },
 		// Viewers: a named machine stays in the save
 		{ TEXT("name"),     MakeEffect(200, 10.f,  600.f, 0.f,  0) },
+		// Titan: Strength = health multiplier, Amount = max traits, Duration = time limit of the fight
+		{ TEXT("titan"),    MakeEffect(1000, 600.f, 1800.f, 300.f, 4, 1.f, 2, 5.f, 8.f) },
 	};
 	// Free and personal effects make no sense as a random pick; channel point prices start at cost x 10
-	const TSet<FString> NotRandom = { TEXT("hi"), TEXT("gift"), TEXT("sign"), TEXT("pet"), TEXT("day"), TEXT("name") };
+	const TSet<FString> NotRandom = { TEXT("hi"), TEXT("gift"), TEXT("sign"), TEXT("pet"), TEXT("day"), TEXT("name"), TEXT("titan") };
 	for (auto& Pair : Defaults)
 	{
 		Pair.Value.bRandomPool = !NotRandom.Contains(Pair.Key);
@@ -120,6 +122,11 @@ FChatControlSettings FChatControlSettings::LoadOrCreate()
 		}
 	}
 	Settings.AddMissingEffectDefaults();
+	if (!IsValidOverlayPort(Settings.OverlayPort))
+	{
+		UE_LOG(LogChatControl, Warning, TEXT("OBS port %d is invalid, reset to the default"), Settings.OverlayPort);
+		Settings.OverlayPort = FChatControlSettings().OverlayPort;
+	}
 	// Write back so new options appear in the file after updates
 	Settings.Save();
 	return Settings;

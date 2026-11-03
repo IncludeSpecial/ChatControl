@@ -162,6 +162,8 @@ namespace
 		{ TEXT("pet"),     TEXT("Viewers"),   TEXT("!pet - named pet"),          TEXT("!pet - именной питомец") },
 		{ TEXT("ambush"),  TEXT("Creatures"), TEXT("!ambush - enemy ambush"),    TEXT("!ambush - засада врагов") },
 		{ TEXT("boss"),    TEXT("Creatures"), TEXT("!boss - alpha monster"),     TEXT("!boss - альфа-монстр") },
+		{ TEXT("titan"),   TEXT("Creatures"), TEXT("!titan - boss fight: random boss and traits, 3 stages, health bar (strength = health, count = max traits, duration = time limit)"),
+		                                      TEXT("!titan - бой с боссом: случайный босс и свойства, 3 стадии, полоска здоровья (сила = здоровье, количество = макс. свойств, длительность = лимит боя)") },
 		{ TEXT("fly"),     TEXT("Movement"),  TEXT("!fly - hover in the air (strength = height, m)"), TEXT("!fly - парение в воздухе (сила = высота, м)") },
 		{ TEXT("shrink"),  TEXT("Movement"),  TEXT("!shrink - tiny player (strength = size)"), TEXT("!shrink - маленький игрок (сила = размер)") },
 		{ TEXT("giant"),   TEXT("Movement"),  TEXT("!giant - giant player (strength = size)"), TEXT("!giant - великан (сила = размер)") },
@@ -372,9 +374,11 @@ void UChatControlModConfig::Register(UConfigManager* ConfigManager, const FChatC
 	UConfigPropertySection* Obs = AddSection(Root, TEXT("Obs"), Tr(TEXT("OBS overlay"), TEXT("Оверлей OBS")));
 	AddBool(Obs, TEXT("Enabled"), Defaults.bOverlayEnabled,
 		Tr(TEXT("Enabled"), TEXT("Включён")),
-		Tr(TEXT("Widgets in OBS read data from http://localhost:<port>/state. Changes apply after restart."),
-		   TEXT("Виджеты в OBS берут данные с http://localhost:<порт>/state. Применяется после перезапуска.")));
-	AddInt(Obs, TEXT("Port"), Defaults.OverlayPort, Tr(TEXT("Port"), TEXT("Порт")));
+		Tr(TEXT("Widgets in OBS read data from http://localhost:<port>/state."),
+		   TEXT("Виджеты в OBS берут данные с http://localhost:<порт>/state.")));
+	AddInt(Obs, TEXT("Port"), Defaults.OverlayPort, Tr(TEXT("Port"), TEXT("Порт")),
+		Tr(TEXT("8787 by default. 1024-65535; anything else is reset to 8787. Applies at once."),
+		   TEXT("По умолчанию 8787. От 1024 до 65535, другое значение сбросится на 8787. Применяется сразу.")));
 	AddString(Obs, TEXT("Folder"), Defaults.OverlayFolder,
 		Tr(TEXT("Widget folder"), TEXT("Папка виджетов")),
 		Tr(TEXT("A folder with your own widgets, opened as http://localhost:<port>/obs/<file>. The built-in feed.html, vote.html and pot.html work either way."),
@@ -418,11 +422,20 @@ void UChatControlModConfig::Register(UConfigManager* ConfigManager, const FChatC
 	AddString(Viewers, TEXT("ColorSubscriber"), Defaults.ColorSubscriber, Tr(TEXT("Subscriber / member color"), TEXT("Цвет подписчиков и спонсоров")));
 
 	// --- Raids ---
-	UConfigPropertySection* Raids = AddSection(Root, TEXT("Raids"), Tr(TEXT("Raids"), TEXT("Рейды")));
+	UConfigPropertySection* Raids = AddSection(Root, TEXT("Raids"), Tr(TEXT("Raids and titans"), TEXT("Рейды и титаны")));
 	AddInt(Raids, TEXT("ViewersPerAmbush"), Defaults.RaidViewersPerAmbush,
 		Tr(TEXT("1 ambush per N raiders"), TEXT("1 засада на N зрителей рейда")));
 	AddInt(Raids, TEXT("MaxAmbushes"), Defaults.RaidMaxAmbushes,
 		Tr(TEXT("Max ambushes"), TEXT("Макс. засад")));
+	AddInt(Raids, TEXT("TitanMinViewers"), Defaults.RaidTitanMinViewers,
+		Tr(TEXT("Titan from N raiders"), TEXT("Титан от N зрителей рейда")), Tr(TEXT("0 = never"), TEXT("0 = никогда")));
+	AddInt(Raids, TEXT("TitanRewardChips"), Defaults.TitanRewardChips,
+		Tr(TEXT("Titan defeated: chips per active viewer"), TEXT("Титан побеждён: чипов каждому активному зрителю")));
+	AddInt(Raids, TEXT("TitanCallerChips"), Defaults.TitanCallerChips,
+		Tr(TEXT("Titan won: chips for the summoner"), TEXT("Титан победил: чипов призвавшему")));
+	AddBool(Raids, TEXT("PeacefulTitans"), Defaults.bPeacefulTitans,
+		Tr(TEXT("Peaceful loot titans"), TEXT("Мирные титаны с лутом")),
+		Tr(TEXT("Giant giraffes, beetles and striders that drop loot"), TEXT("Огромные жирафы, жуки и страусы, из которых падает лут")));
 	AddInt(Raids, TEXT("BossMinViewers"), Defaults.RaidBossMinViewers,
 		Tr(TEXT("Boss from N raiders"), TEXT("Босс от N зрителей рейда")),
 		Tr(TEXT("0 = never"), TEXT("0 = никогда")));
@@ -485,7 +498,7 @@ void UChatControlModConfig::Register(UConfigManager* ConfigManager, const FChatC
 	ConfigManager->RegisterModConfiguration(StaticClass());
 }
 
-bool UChatControlModConfig::ApplyTo(UConfigManager* ConfigManager, FChatControlSettings& Settings)
+bool UChatControlModConfig::ApplyTo(UConfigManager* ConfigManager, FChatControlSettings& Settings, bool* bOutPortRejected)
 {
 	const UConfigPropertySection* Root = ConfigManager->GetConfigurationRootSection(GetId());
 	if (!Root)
@@ -549,7 +562,28 @@ bool UChatControlModConfig::ApplyTo(UConfigManager* ConfigManager, FChatControlS
 
 	const UConfigPropertySection* Obs = GetSection(Root, TEXT("Obs"));
 	bChanged |= Read<UConfigPropertyBool>(Obs, TEXT("Enabled"), Settings.bOverlayEnabled);
-	bChanged |= Read<UConfigPropertyInteger>(Obs, TEXT("Port"), Settings.OverlayPort);
+	int32 Port = Settings.OverlayPort;
+	if (Read<UConfigPropertyInteger>(Obs, TEXT("Port"), Port))
+	{
+		// A system or impossible port would silently kill the OBS server: put the default back, in the menu too
+		if (!FChatControlSettings::IsValidOverlayPort(Port))
+		{
+			Port = FChatControlSettings().OverlayPort;
+			if (const TObjectPtr<UConfigProperty>* Found = Obs->SectionProperties.Find(TEXT("Port")))
+			{
+				if (UConfigPropertyInteger* Property = Cast<UConfigPropertyInteger>(Found->Get()))
+				{
+					Property->Value = Port;
+				}
+			}
+			if (bOutPortRejected)
+			{
+				*bOutPortRejected = true;
+			}
+		}
+		bChanged |= Port != Settings.OverlayPort;
+		Settings.OverlayPort = Port;
+	}
 	bChanged |= Read<UConfigPropertyString>(Obs, TEXT("Folder"), Settings.OverlayFolder);
 
 	const UConfigPropertySection* Viewers = GetSection(Root, TEXT("Viewers"));
@@ -574,6 +608,10 @@ bool UChatControlModConfig::ApplyTo(UConfigManager* ConfigManager, FChatControlS
 	bChanged |= Read<UConfigPropertyInteger>(Raids, TEXT("ViewersPerAmbush"), Settings.RaidViewersPerAmbush);
 	bChanged |= Read<UConfigPropertyInteger>(Raids, TEXT("MaxAmbushes"), Settings.RaidMaxAmbushes);
 	bChanged |= Read<UConfigPropertyInteger>(Raids, TEXT("BossMinViewers"), Settings.RaidBossMinViewers);
+	bChanged |= Read<UConfigPropertyInteger>(Raids, TEXT("TitanMinViewers"), Settings.RaidTitanMinViewers);
+	bChanged |= Read<UConfigPropertyInteger>(Raids, TEXT("TitanRewardChips"), Settings.TitanRewardChips);
+	bChanged |= Read<UConfigPropertyInteger>(Raids, TEXT("TitanCallerChips"), Settings.TitanCallerChips);
+	bChanged |= Read<UConfigPropertyBool>(Raids, TEXT("PeacefulTitans"), Settings.bPeacefulTitans);
 
 	const UConfigPropertySection* Advanced = GetSection(Root, TEXT("Advanced"));
 	bChanged |= Read<UConfigPropertyInteger>(Advanced, TEXT("ChaosBudgetPerMinute"), Settings.ChaosBudgetPerMinute);

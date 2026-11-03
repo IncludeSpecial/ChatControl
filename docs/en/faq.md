@@ -38,7 +38,7 @@ Effects are: `!boss`, `!fog`, `!gift` and so on. The basic commands also have Ru
 - The game must be running with a loaded save; the widgets come alive by themselves.
 - In the Browser source **Local file** must be unchecked and the URL must start with `http://localhost:8787/obs/`.
 - "Widget not found" lists all widgets that exist; click one to see the right URL.
-- Port 8787 taken by another program? Change **OBS overlay -> Port**, restart the game and update the URLs.
+- Port 8787 taken by another program? Change **OBS overlay -> Port** (applies at once) and update the URLs.
 
 ### Can my viewers abuse `!test`, `!panic` or `!clear`?
 No. `!test` works only for the channel owner, checked by the Twitch/YouTube owner badge, which chat cannot fake.

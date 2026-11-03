@@ -5,7 +5,9 @@
 class UWorld;
 class AFGCharacterPlayer;
 class UChatControlSubsystem;
+class AActor;
 struct FChatEffectSettings;
+struct FChatControlSettings;
 
 struct FChatEffectContext
 {
@@ -34,4 +36,10 @@ namespace ChatEffects
 {
 	/** All built-in effects, keyed by id (the chat command without "!") */
 	TMap<FString, FChatEffect> CreateAll();
+
+	/** A free spot on a ring around the player where a creature with this capsule fits */
+	bool FindCreatureSpot(UWorld* World, const AActor* Player, const FChatControlSettings& Settings, float Radius, float HalfHeight, FVector& OutLocation);
+
+	/** Drops a crate with random parts; AdvancedShare = chance of an advanced part per stack */
+	bool DropLootCrate(UWorld* World, AActor* Player, const FVector& Location, int32 Stacks, float AdvancedShare);
 }

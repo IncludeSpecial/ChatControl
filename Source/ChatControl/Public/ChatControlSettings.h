@@ -132,7 +132,7 @@ struct FChatControlSettings
 	UPROPERTY() int32 VoteReward = 5;
 	/** Shared pot: when chat fills GoalChips together, GoalEffect runs */
 	UPROPERTY() bool bGoalEnabled = true;
-	UPROPERTY() FString GoalEffect = TEXT("boss");
+	UPROPERTY() FString GoalEffect = TEXT("titan");
 	UPROPERTY() int32 GoalChips = 1000;
 
 	// --- OBS overlay ---
@@ -148,6 +148,16 @@ struct FChatControlSettings
 	UPROPERTY() int32 RaidMaxAmbushes = 5;
 	/** Raids with at least this many viewers also bring a boss. 0 = never */
 	UPROPERTY() int32 RaidBossMinViewers = 30;
+	/** Raids with at least this many viewers bring a titan instead of a boss. 0 = never */
+	UPROPERTY() int32 RaidTitanMinViewers = 60;
+
+	// --- Titans (boss fights) ---
+	/** Chips for every active viewer when the streamer defeats a titan */
+	UPROPERTY() int32 TitanRewardChips = 50;
+	/** Chips for the viewer who summoned the titan if it defeats the streamer */
+	UPROPERTY() int32 TitanCallerChips = 200;
+	/** Peaceful giant wildlife can show up as a loot titan */
+	UPROPERTY() bool bPeacefulTitans = true;
 
 	// --- FICSIT Chips economy ---
 	UPROPERTY() int32 ChipsPerInterval = 10;
@@ -188,6 +198,8 @@ struct FChatControlSettings
 	float GetCreatureMultiplier() const { return Difficulty <= 1 ? 0.5f : Difficulty >= 3 ? 2.f : 1.f; }
 
 	static FString GetSettingsPath();
+	/** Ports below 1024 belong to the system */
+	static bool IsValidOverlayPort(int32 Port) { return Port >= 1024 && Port <= 65535; }
 	static FChatControlSettings LoadOrCreate();
 	void Save() const;
 };

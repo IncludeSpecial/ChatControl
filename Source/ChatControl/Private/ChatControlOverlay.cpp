@@ -16,28 +16,74 @@
 #include "HAL/FileManager.h"
 #include "Misc/Paths.h"
 #include "Misc/ConfigCacheIni.h"
+#include "IPAddress.h"
+#include "SocketSubsystem.h"
+#include "Sockets.h"
 #include "Interfaces/IPluginManager.h"
+
+using ChatText::Tr;
+
+namespace
+{
+	/** True if nothing listens on this port of this PC yet */
+	bool IsLocalPortFree(int32 Port)
+	{
+		ISocketSubsystem* Sockets = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM);
+		FSocket* Socket = Sockets ? Sockets->CreateSocket(NAME_Stream, TEXT("ChatControlPortCheck"), false) : nullptr;
+		if (!Socket)
+		{
+			return true;
+		}
+		TSharedRef<FInternetAddr> Address = Sockets->CreateInternetAddr();
+		Address->SetLoopbackAddress();
+		Address->SetPort(Port);
+		const bool bFree = Socket->Bind(*Address);
+		Socket->Close();
+		Sockets->DestroySocket(Socket);
+		return bFree;
+	}
+}
 
 void UChatControlSubsystem::StartOverlay()
 {
-	if (!Settings.bOverlayEnabled || Settings.OverlayPort <= 0)
+	if (!Settings.bOverlayEnabled || !FChatControlSettings::IsValidOverlayPort(Settings.OverlayPort))
 	{
 		return;
+	}
+	// Another program on the chosen port: fall back to the default one rather than having no widgets at all
+	int32 Port = Settings.OverlayPort;
+	const int32 DefaultPort = FChatControlSettings().OverlayPort;
+	if (!OverlayPorts.Contains(Port) && !IsLocalPortFree(Port))
+	{
+		if (Port != DefaultPort && (OverlayPorts.Contains(DefaultPort) || IsLocalPortFree(DefaultPort)))
+		{
+			UE_LOG(LogChatControl, Warning, TEXT("Overlay: port %d is taken by another program, using %d"), Port, DefaultPort);
+			Announce(FText::Format(Tr(TEXT("OBS port {0} is taken by another program, widgets use {1} for now."), TEXT("Порт OBS {0} занят другой программой, виджеты пока работают на {1}.")),
+				FText::AsNumber(Port, &FNumberFormattingOptions::DefaultNoGrouping()), FText::AsNumber(DefaultPort, &FNumberFormattingOptions::DefaultNoGrouping())));
+			Port = DefaultPort;
+		}
+		else
+		{
+			UE_LOG(LogChatControl, Warning, TEXT("Overlay: port %d is taken by another program"), Port);
+			Announce(FText::Format(Tr(TEXT("OBS port {0} is taken by another program. Pick another one in the mod settings."), TEXT("Порт OBS {0} занят другой программой. Выбери другой в настройках мода.")),
+				FText::AsNumber(Port, &FNumberFormattingOptions::DefaultNoGrouping())));
+			return;
+		}
 	}
 	// The game's engine config binds HTTP listeners to "any"; keep this one on this PC only, not the local network
 	static const TCHAR* ListenerSection = TEXT("HTTPServer.Listeners");
 	TArray<FString> Overrides;
 	GConfig->GetArray(ListenerSection, TEXT("ListenerOverrides"), Overrides, GEngineIni);
-	const FString LocalOnly = FString::Printf(TEXT("(Port=%d,BindAddress=localhost)"), Settings.OverlayPort);
+	const FString LocalOnly = FString::Printf(TEXT("(Port=%d,BindAddress=localhost)"), Port);
 	if (!Overrides.Contains(LocalOnly))
 	{
 		Overrides.Insert(LocalOnly, 0);
 		GConfig->SetArray(ListenerSection, TEXT("ListenerOverrides"), Overrides, GEngineIni);
 	}
-	TSharedPtr<IHttpRouter> Router = FHttpServerModule::Get().GetHttpRouter(Settings.OverlayPort, false);
+	TSharedPtr<IHttpRouter> Router = FHttpServerModule::Get().GetHttpRouter(Port, false);
 	if (!Router)
 	{
-		UE_LOG(LogChatControl, Warning, TEXT("Overlay: port %d is unavailable"), Settings.OverlayPort);
+		UE_LOG(LogChatControl, Warning, TEXT("Overlay: port %d is unavailable"), Port);
 		return;
 	}
 	TWeakObjectPtr<UChatControlSubsystem> WeakThis = this;
@@ -61,8 +107,9 @@ void UChatControlSubsystem::StartOverlay()
 			return true;
 		}));
 	OverlayRouter = Router;
+	OverlayPorts.Add(Port);
 	FHttpServerModule::Get().StartAllListeners();
-	UE_LOG(LogChatControl, Log, TEXT("Overlay: http://localhost:%d/state, widgets from %s"), Settings.OverlayPort, *FString::Join(GetOverlayFolders(), TEXT(" + ")));
+	UE_LOG(LogChatControl, Log, TEXT("Overlay: http://localhost:%d/state, widgets from %s"), Port, *FString::Join(GetOverlayFolders(), TEXT(" + ")));
 }
 
 void UChatControlSubsystem::StopOverlay()
@@ -218,6 +265,7 @@ FString UChatControlSubsystem::BuildOverlayJson() const
 	Chaos->SetBoolField(TEXT("connected"), Twitch.IsValid() && Twitch->IsConnected());
 	Chaos->SetBoolField(TEXT("youtube"), YouTube.IsValid() && YouTube->IsConnected());
 	Root->SetObjectField(TEXT("chaos"), Chaos);
+	Root->SetObjectField(TEXT("boss"), BuildBossJson());
 	// Built-in widgets label themselves in the mod language
 	Root->SetStringField(TEXT("language"), ChatText::IsRussian() ? TEXT("ru") : TEXT("en"));
 
