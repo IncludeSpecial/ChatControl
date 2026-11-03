@@ -93,7 +93,7 @@ Creatures carry the viewer's name and rank, leave after 5 minutes and never spaw
 
 **Bosses:** Hog King, Cliff Tyrant, Nuclear Hog (its minions explode), Stinger Queen and Stinger Lord (swarms),
 Green, Fire, Sand and Deep Matriarch (spitters of other elements, night and fog), Nest Mother (lays crab nests that burst into flying crabs),
-and loot titans - Sky Giraffe, Colossal Beetle, Giant Strider - that follow you, stomp when you get close and drop loot at every stage.
+and loot titans - Sky Giraffe, Colossal Beetle, Giant Strider - that follow you, stomp when you get close, charge at you, leap and slam the ground from stage 2, and drop loot at every stage.
 
 **Traits:** Armored (more health), Swift (faster), Colossal (bigger), Undying (heals when left alone), Summoning (minions every 30 s),
 Nocturnal (night), Misty (fog), Sparking (blackout at stage 2), Bloodthirsty (heals when it hits you), Rabid (faster as it gets hurt).

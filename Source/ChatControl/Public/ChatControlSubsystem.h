@@ -246,6 +246,10 @@ private:
 		double NextRegenTime = 0.0;
 		double NextAggroTime = 0.0;
 		double NextStompTime = 0.0;
+		double NextChargeTime = 0.0;
+		double NextLeapTime = 0.0;
+		double LeapStartTime = 0.0;
+		bool bLeaping = false;
 		TArray<TWeakObjectPtr<APawn>> Minions;
 	};
 	FBossFight BossFight;

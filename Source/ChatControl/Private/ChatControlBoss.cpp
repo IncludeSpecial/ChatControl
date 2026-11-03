@@ -11,6 +11,7 @@
 #include "AIController.h"
 #include "GameFramework/Character.h"
 #include "Components/CapsuleComponent.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "Components/WidgetComponent.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Layout/SBox.h"
@@ -98,6 +99,38 @@ namespace
 	};
 
 	const TCHAR* const TitanKey = TEXT("system:titan");
+
+	/** Ground on a ring around the player, traced from above; no fit test, for small static things like nests */
+	bool FindGroundNear(UWorld* World, const AActor* Player, float RadiusMin, float RadiusMax, FVector& OutLocation)
+	{
+		FCollisionQueryParams Params(TEXT("ChatControlNest"), false, Player);
+		for (int32 Attempt = 0; Attempt < 12; ++Attempt)
+		{
+			const float Angle = FMath::FRandRange(0.f, 2.f * PI);
+			const FVector Probe = Player->GetActorLocation() + FVector(FMath::Cos(Angle), FMath::Sin(Angle), 0.f) * FMath::FRandRange(RadiusMin, RadiusMax);
+			FHitResult Ground;
+			if (World->LineTraceSingleByChannel(Ground, Probe + FVector(0, 0, 400.f), Probe - FVector(0, 0, 1500.f), ECC_Visibility, Params))
+			{
+				OutLocation = Ground.ImpactPoint;
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** Damage that fades with distance from Center and throws the player away from it */
+	void Shockwave(AFGCharacterPlayer* Player, const FVector& Center, float Radius, float Damage, float Push, AActor* Causer)
+	{
+		const float Distance = FVector::Dist2D(Player->GetActorLocation(), Center);
+		if (Distance > Radius || !Player->GetHealthComponent())
+		{
+			return;
+		}
+		const float Falloff = 1.f - 0.6f * Distance / Radius;
+		Player->GetHealthComponent()->TakeDamage(Player, Damage * Falloff, GetDefault<UDamageType>(), nullptr, Causer);
+		const FVector Away = (Player->GetActorLocation() - Center).GetSafeNormal2D();
+		Player->LaunchCharacter(Away * Push * Falloff + FVector(0, 0, Push * 0.5f), true, true);
+	}
 
 	/** Full aggro on the player, so a freshly spawned creature attacks instead of standing around */
 	void ProvokeCreature(APawn* Pawn, AActor* Player)
@@ -483,7 +516,7 @@ void UChatControlSubsystem::TickBoss(double Now)
 	}
 	if (Player && Now >= BossFight.NextAggroTime)
 	{
-		BossFight.NextAggroTime = Now + 3.0;
+		BossFight.NextAggroTime = Now + (Type.Kind == EBossKind::Peaceful ? 1.5 : 3.0);
 		ProvokeCreature(Boss, Player);
 		BossFight.Minions.RemoveAll([](const TWeakObjectPtr<APawn>& Minion) { return !Minion.IsValid(); });
 		for (const TWeakObjectPtr<APawn>& Minion : BossFight.Minions)
@@ -495,24 +528,53 @@ void UChatControlSubsystem::TickBoss(double Now)
 			// Wildlife has no attack: walk it to the player instead
 			if (AAIController* Controller = Cast<AAIController>(Boss->GetController()))
 			{
-				Controller->MoveToActor(Player, 250.f);
+				Controller->MoveToActor(Player, 150.f);
 			}
 		}
 	}
-	if (Type.Kind == EBossKind::Peaceful && Player && Now >= BossFight.NextStompTime)
+	if (Type.Kind == EBossKind::Peaceful && Player)
 	{
-		// Stomp: hurts and throws the player back when they stand too close
-		BossFight.NextStompTime = Now + 2.0;
+		ACharacter* Beast = Cast<ACharacter>(Boss);
 		float Radius = 150.f, HalfHeight = 100.f;
-		if (const ACharacter* Character = Cast<ACharacter>(Boss); Character && Character->GetCapsuleComponent())
+		if (Beast && Beast->GetCapsuleComponent())
 		{
-			Character->GetCapsuleComponent()->GetScaledCapsuleSize(Radius, HalfHeight);
+			Beast->GetCapsuleComponent()->GetScaledCapsuleSize(Radius, HalfHeight);
 		}
-		const FVector Away = (Player->GetActorLocation() - Boss->GetActorLocation()).GetSafeNormal2D();
-		if (FVector::Dist2D(Player->GetActorLocation(), Boss->GetActorLocation()) < Radius + 450.f && Player->GetHealthComponent())
+		const float DamageScale = Settings.Difficulty >= 3 ? 1.5f : Settings.Difficulty <= 1 ? 0.6f : 1.f;
+		const float Distance = FVector::Dist2D(Player->GetActorLocation(), Boss->GetActorLocation());
+
+		// Stomp: hurts and throws the player back when they stand too close
+		if (Now >= BossFight.NextStompTime)
 		{
-			Player->GetHealthComponent()->TakeDamage(Player, 10.f * (Settings.Difficulty >= 3 ? 1.5f : Settings.Difficulty <= 1 ? 0.6f : 1.f), GetDefault<UDamageType>(), nullptr, Boss);
-			Player->LaunchCharacter(Away * 900.f + FVector(0, 0, 450.f), true, true);
+			BossFight.NextStompTime = Now + (BossFight.Stage >= 3 ? 1.2 : 2.0);
+			Shockwave(Player, Boss->GetActorLocation(), Radius + 550.f, 15.f * DamageScale, 900.f, Boss);
+		}
+
+		// Charge: a running jump straight at the player
+		if (Beast && Now >= BossFight.NextChargeTime && Distance > 800.f && Distance < 3500.f && Beast->GetCharacterMovement() && Beast->GetCharacterMovement()->IsMovingOnGround())
+		{
+			BossFight.NextChargeTime = Now + (BossFight.Stage >= 3 ? 6.0 : 9.0);
+			const FVector Toward = (Player->GetActorLocation() - Boss->GetActorLocation()).GetSafeNormal2D();
+			Beast->LaunchCharacter(Toward * FMath::Min(2200.f, Distance * 1.6f) + FVector(0, 0, 350.f), true, true);
+		}
+
+		// Leap slam from stage 2: up into the air, lands next to the player with a shockwave
+		UCharacterMovementComponent* Movement = Beast ? Beast->GetCharacterMovement() : nullptr;
+		if (Movement && BossFight.bLeaping && Now - BossFight.LeapStartTime > 0.4 && Movement->IsMovingOnGround())
+		{
+			BossFight.bLeaping = false;
+			Shockwave(Player, Boss->GetActorLocation(), Radius + 900.f, 30.f * DamageScale, 1300.f, Boss);
+		}
+		else if (Movement && !BossFight.bLeaping && BossFight.Stage >= 2 && Now >= BossFight.NextLeapTime && Distance < 4000.f && Movement->IsMovingOnGround())
+		{
+			BossFight.NextLeapTime = Now + (BossFight.Stage >= 3 ? 10.0 : 14.0);
+			BossFight.bLeaping = true;
+			BossFight.LeapStartTime = Now;
+			// About 1.3 s in the air: horizontal speed covers the distance, vertical speed brings it back down
+			const float Gravity = FMath::Abs(Movement->GetGravityZ());
+			const float AirTime = 1.3f;
+			const FVector Toward = Player->GetActorLocation() - Boss->GetActorLocation();
+			Beast->LaunchCharacter(FVector(Toward.X, Toward.Y, 0.f) / AirTime + FVector(0, 0, 0.5f * Gravity * AirTime), true, true);
 		}
 	}
 	const bool bPeriodicSummons = (BossFight.Traits & Summoning) || Type.Kind == EBossKind::Hatcher;
@@ -544,6 +606,9 @@ void UChatControlSubsystem::EnterBossStage(int32 Stage)
 			ChatEffects::DropLootCrate(GetGameWorld(), Player, BossFight.Boss->GetActorLocation() + FVector(0, 0, 100.f), 3, 0.4f);
 		}
 		Announce(FText::Format(Tr(TEXT("{0} drops some loot! Stage {1}/3"), TEXT("{0} роняет лут! Стадия {1}/3")), Title, FText::AsNumber(Stage)));
+		Announce(Stage == 2
+			? FText::Format(Tr(TEXT("{0} learned to leap - watch the ground!"), TEXT("{0} научился прыгать - следи за землёй!")), Title)
+			: FText::Format(Tr(TEXT("{0} goes wild: faster charges and stomps!"), TEXT("{0} в бешенстве: таран и топот чаще!")), Title));
 		return;
 	}
 
@@ -619,11 +684,11 @@ int32 UChatControlSubsystem::SummonMinions(int32 Count)
 		{
 			// A crab nest on the ground that bursts into flying crabs when the player is near
 			FVector NestLocation;
-			if (ChatEffects::FindCreatureSpot(World, Player, Settings, 120.f, 60.f, NestLocation))
+			if (FindGroundNear(World, Player, 500.f, 900.f, NestLocation))
 			{
 				FActorSpawnParameters NestParams;
-				NestParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-				if (AFGCrabHatcher* Nest = World->SpawnActor<AFGCrabHatcher>(AnyClass, NestLocation - FVector(0, 0, 60.f), FRotator(0.f, FMath::FRandRange(0.f, 360.f), 0.f), NestParams))
+				NestParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+				if (AFGCrabHatcher* Nest = World->SpawnActor<AFGCrabHatcher>(AnyClass, NestLocation, FRotator(0.f, FMath::FRandRange(0.f, 360.f), 0.f), NestParams))
 				{
 					Nest->SetLifeSpan(FMath::Max(10.f, Settings.CreatureLifeSpanSeconds));
 					Nest->RegisterHostilePlayer(Player);
