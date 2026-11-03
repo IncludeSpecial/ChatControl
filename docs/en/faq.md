@@ -23,6 +23,20 @@ or make the wait longer.
 ### A giant boss is still in my save after loading
 A titan that was alive when the game was saved comes back after loading, without its health bar and time limit. Just kill it.
 
+### The titan does not show up
+- Only one titan at a time; the next one waits in the queue until the fight is over.
+- Titans, like all creatures, wait while you are near the HUB (40 m by default, **Advanced -> Safe zone**).
+- It needs the chaos budget (4 points): right after other harmful effects it may wait up to a minute.
+- `!test titan` tells you in the game chat when it can't run right now.
+
+### How do viewers give chips to each other?
+`!give <nick> <amount>` (or `!передать`). 10-500 per transfer, 10% goes to the shared pot, 1000 sent and 1000 received
+per viewer per day, one transfer a minute, only to viewers who have chatted before. All limits are in **Chip transfers**.
+
+### Someone has a rainbow name and the title "Mod developer"
+That is the author of ChatControl visiting your stream. They are recognized by their Twitch account id, so nobody can fake it
+by copying the name. Don't want it? Turn off **Viewers in the world -> Highlight the mod developer**.
+
 ### Does it work in multiplayer?
 Not yet. The mod is made for singleplayer.
 
