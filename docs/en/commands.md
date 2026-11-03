@@ -10,6 +10,7 @@ Commands are typed in Twitch or YouTube chat. Answers appear in the game chat an
 |---|---|
 | `!chips` / `!чипы` | Your chip balance and rank |
 | `!daily` / `!бонус` | Daily chip bonus, once per calendar day |
+| `!give <nick> <amount>` / `!передать` | Give chips to another viewer. 10-500 per transfer, 10% goes to the pot, 1000 sent and 1000 received per day, one transfer a minute; only to viewers who have chatted before |
 | `!effects`, `!help` | All enabled effects with current prices |
 | `!1` `!2` `!3`, `!vote N` / `!голос N` | Vote during a chat vote (free, gives a few chips) |
 | `!pot N` / `!копилка N` | Put N chips into the shared pot; a full pot summons a titan (on new installs) |

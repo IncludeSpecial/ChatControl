@@ -483,6 +483,12 @@ void UChatControlSubsystem::HandleCommand(const FChatEvent& Event)
 		return;
 	}
 
+	if ((Command == TEXT("give") || Command == TEXT("передать")) && Settings.bTransfersEnabled)
+	{
+		HandleGiveCommand(Event, RawArgs);
+		return;
+	}
+
 	if ((Command == TEXT("daily") || Command == TEXT("бонус")) && Settings.DailyChips > 0)
 	{
 		if (Economy.ClaimDaily(Key, Event.DisplayName, Settings.DailyChips))
@@ -557,6 +563,81 @@ void UChatControlSubsystem::HandleCommand(const FChatEvent& Event)
 	}
 }
 
+void UChatControlSubsystem::HandleGiveCommand(const FChatEvent& Event, const FString& Args)
+{
+	const FText Name = FText::FromString(Event.DisplayName);
+	auto Number = [](int32 Value) { return FText::AsNumber(Value); };
+
+	// "!give nick 100", "!give @nick 100" or "!give 100 nick"
+	TArray<FString> Parts;
+	Args.ParseIntoArrayWS(Parts);
+	FString Target;
+	int32 Amount = 0;
+	for (FString Part : Parts)
+	{
+		if (Part.IsNumeric() && Amount == 0)
+		{
+			Amount = FCString::Atoi(*Part);
+		}
+		else if (Target.IsEmpty())
+		{
+			Part.RemoveFromStart(TEXT("@"));
+			Target = Part;
+		}
+	}
+	if (Target.IsEmpty() || Amount <= 0)
+	{
+		Announce(FText::Format(Tr(TEXT("{0}, use: !give <nick> <amount>"), TEXT("{0}, так: !give <ник> <сколько>")), Name));
+		return;
+	}
+
+	const double Now = FPlatformTime::Seconds();
+	const FString FromKey = Event.GetEconomyKey();
+	if (const double* Until = TransferCooldownUntil.Find(FromKey); Until && Now < *Until)
+	{
+		Announce(FText::Format(Tr(TEXT("{0}, next transfer in {1} s."), TEXT("{0}, следующий перевод через {1} с.")), Name, Number(FMath::CeilToInt(*Until - Now))));
+		return;
+	}
+	if (Amount < Settings.TransferMin || (Settings.TransferMax > 0 && Amount > Settings.TransferMax))
+	{
+		Announce(FText::Format(Tr(TEXT("{0}, a transfer is {1} to {2} chips."), TEXT("{0}, перевод - от {1} до {2} чипов.")), Name, Number(Settings.TransferMin), Number(Settings.TransferMax)));
+		return;
+	}
+	const FString ToKey = Economy.FindKeyByName(Target, Event.Platform);
+	if (ToKey.IsEmpty() || Settings.IgnoredUsers.Contains(Target.ToLower()))
+	{
+		Announce(FText::Format(Tr(TEXT("{0}, {1} hasn't chatted here yet."), TEXT("{0}, {1} ещё не писал(а) в этот чат.")), Name, FText::FromString(Target)));
+		return;
+	}
+	if (ToKey == FromKey)
+	{
+		Announce(FText::Format(Tr(TEXT("{0}, you can't give chips to yourself."), TEXT("{0}, себе передать нельзя.")), Name));
+		return;
+	}
+
+	const int32 Fee = FMath::Clamp(FMath::RoundToInt(Amount * FMath::Clamp(Settings.TransferFeePercent, 0, 100) / 100.f), 0, Amount);
+	int32 Left = 0;
+	const FText ToName = FText::FromString(Economy.Find(ToKey) ? Economy.Find(ToKey)->DisplayName : Target);
+	switch (Economy.Transfer(FromKey, ToKey, Amount, Fee, Settings.TransferSendPerDay, Settings.TransferReceivePerDay, Left))
+	{
+	case EChipTransfer::Done:
+		TransferCooldownUntil.Add(FromKey, Now + Settings.TransferCooldownSeconds);
+		Announce(Fee > 0
+			? FText::Format(Tr(TEXT("{0} gave {1} {2} chips ({3} went to the pot)."), TEXT("{0} передаёт {1} {2} чипов ({3} ушло в копилку).")), Name, ToName, Number(Amount - Fee), Number(Fee))
+			: FText::Format(Tr(TEXT("{0} gave {1} {2} chips."), TEXT("{0} передаёт {1} {2} чипов.")), Name, ToName, Number(Amount)));
+		break;
+	case EChipTransfer::NotEnoughChips:
+		Announce(FText::Format(Tr(TEXT("{0}, you only have {1} chips."), TEXT("{0}, у тебя только {1} чипов.")), Name, Number(Left)));
+		break;
+	case EChipTransfer::SenderDailyLimit:
+		Announce(FText::Format(Tr(TEXT("{0}, daily send limit: {1} more chips today."), TEXT("{0}, дневной лимит отправки: сегодня можно ещё {1} чипов.")), Name, Number(Left)));
+		break;
+	case EChipTransfer::ReceiverDailyLimit:
+		Announce(FText::Format(Tr(TEXT("{0}, {1} can only receive {2} more chips today."), TEXT("{0}, {1} сегодня может получить ещё только {2} чипов.")), Name, ToName, Number(Left)));
+		break;
+	}
+}
+
 void UChatControlSubsystem::HandleTestCommand(const FChatEvent& Event, const FString& Args)
 {
 	FString What, AmountText;
@@ -617,7 +698,7 @@ void UChatControlSubsystem::HandleTestCommand(const FChatEvent& Event, const FSt
 	}
 	else if (static const TSet<FString> ChatCommands = { TEXT("chips"), TEXT("чипы"), TEXT("daily"), TEXT("бонус"), TEXT("effects"), TEXT("help"),
 		TEXT("pause"), TEXT("panic"), TEXT("clear"), TEXT("убрать"), TEXT("vote"), TEXT("голос"), TEXT("pot"), TEXT("копилка"),
-		TEXT("top"), TEXT("топ"), TEXT("stats"), TEXT("статистика"), TEXT("1"), TEXT("2"), TEXT("3") }; ChatCommands.Contains(What))
+		TEXT("top"), TEXT("топ"), TEXT("stats"), TEXT("статистика"), TEXT("give"), TEXT("передать"), TEXT("1"), TEXT("2"), TEXT("3") }; ChatCommands.Contains(What))
 	{
 		// "!test clear" and the like: ordinary commands just run as if typed without !test
 		Fake.Text = TEXT("!") + What + (AmountText.IsEmpty() ? FString() : TEXT(" ") + AmountText);

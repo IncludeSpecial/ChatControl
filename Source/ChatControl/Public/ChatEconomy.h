@@ -14,6 +14,10 @@ struct FChatViewerRecord
 	UPROPERTY() int32 ChipsSpent = 0;
 	/** Local date (YYYY-MM-DD) of the last !daily */
 	UPROPERTY() FString LastDaily;
+	/** Local date (YYYY-MM-DD) the transfer counters below belong to */
+	UPROPERTY() FString TransferDay;
+	UPROPERTY() int32 SentToday = 0;
+	UPROPERTY() int32 ReceivedToday = 0;
 
 	// Runtime only (not saved)
 	double LastMessageTime = -1.0;
@@ -29,6 +33,14 @@ struct FChatEconomyData
 	UPROPERTY() TMap<FString, FChatViewerRecord> Viewers;
 	/** Shared chip pot chat fills together */
 	UPROPERTY() int32 Pot = 0;
+};
+
+enum class EChipTransfer : uint8
+{
+	Done,
+	NotEnoughChips,
+	SenderDailyLimit,
+	ReceiverDailyLimit,
 };
 
 /** FICSIT Chips: viewers earn them by being active in chat and spend them on effects. Persisted between streams. */
@@ -49,6 +61,13 @@ public:
 	/** Gives Amount once per calendar day; false if already claimed today */
 	bool ClaimDaily(const FString& Key, const FString& DisplayName, int32 Amount);
 	const FChatViewerRecord* FindByName(const FString& DisplayName) const;
+	/** Economy key of a viewer by display name; a viewer on PreferredPlatform wins if the name exists on several */
+	FString FindKeyByName(const FString& DisplayName, const FString& PreferredPlatform) const;
+	/**
+	 * Moves Amount chips from one viewer to another: the receiver gets Amount - Fee, the fee goes to the pot.
+	 * Daily limits count chips sent and received per calendar day; 0 = no limit. OutLeft = what the blocking limit still allows.
+	 */
+	EChipTransfer Transfer(const FString& FromKey, const FString& ToKey, int32 Amount, int32 Fee, int32 SendLimit, int32 ReceiveLimit, int32& OutLeft);
 
 	/** Gives Amount chips to everyone who wrote within ActiveWindow. Returns how many viewers were paid. */
 	int32 PayActiveViewers(double Now, double ActiveWindow, int32 Amount);

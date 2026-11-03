@@ -290,6 +290,23 @@ void UChatControlModConfig::Register(UConfigManager* ConfigManager, const FChatC
 	AddInt(Economy, TEXT("ChipsPerSub"), Defaults.ChipsPerSub,
 		Tr(TEXT("Chips per sub"), TEXT("Чипов за подписку")));
 
+	// --- Chip transfers ---
+	UConfigPropertySection* Transfers = AddSection(Root, TEXT("Transfers"), Tr(TEXT("Chip transfers (!give)"), TEXT("Передача чипов (!give)")));
+	AddBool(Transfers, TEXT("Enabled"), Defaults.bTransfersEnabled,
+		Tr(TEXT("Viewers can give chips"), TEXT("Зрители могут передавать чипы")),
+		Tr(TEXT("!give <nick> <amount>, only to viewers who have chatted before"), TEXT("!give <ник> <сколько>, только тем, кто уже писал в чат")));
+	AddInt(Transfers, TEXT("Min"), Defaults.TransferMin, Tr(TEXT("Smallest transfer"), TEXT("Минимум за перевод")));
+	AddInt(Transfers, TEXT("Max"), Defaults.TransferMax, Tr(TEXT("Biggest transfer"), TEXT("Максимум за перевод")));
+	AddInt(Transfers, TEXT("FeePercent"), Defaults.TransferFeePercent,
+		Tr(TEXT("Fee to the pot (%)"), TEXT("Комиссия в копилку (%)")),
+		Tr(TEXT("The receiver gets the amount minus this share; it goes to the shared pot"), TEXT("Получатель получает сумму минус эту долю, она уходит в общую копилку")));
+	AddInt(Transfers, TEXT("SendPerDay"), Defaults.TransferSendPerDay,
+		Tr(TEXT("Send limit per day"), TEXT("Лимит отправки в день")), Tr(TEXT("0 = no limit"), TEXT("0 = без лимита")));
+	AddInt(Transfers, TEXT("ReceivePerDay"), Defaults.TransferReceivePerDay,
+		Tr(TEXT("Receive limit per day"), TEXT("Лимит получения в день")), Tr(TEXT("0 = no limit"), TEXT("0 = без лимита")));
+	AddInt(Transfers, TEXT("CooldownSeconds"), FMath::RoundToInt(Defaults.TransferCooldownSeconds),
+		Tr(TEXT("Cooldown between transfers (s)"), TEXT("Пауза между переводами (с)")));
+
 	// --- Effects: one collapsed block per effect, grouped by kind ---
 	UConfigPropertySection* Effects = AddSection(Root, TEXT("Effects"), Tr(TEXT("Effects"), TEXT("Эффекты")));
 	TMap<FString, UConfigPropertySection*> Categories;
@@ -546,6 +563,15 @@ bool UChatControlModConfig::ApplyTo(UConfigManager* ConfigManager, FChatControlS
 	bChanged |= Read<UConfigPropertyBool>(Economy, TEXT("AnnouncePayouts"), Settings.bAnnouncePayouts);
 	bChanged |= Read<UConfigPropertyInteger>(Economy, TEXT("ChipsPerBit"), Settings.ChipsPerBit);
 	bChanged |= Read<UConfigPropertyInteger>(Economy, TEXT("ChipsPerSub"), Settings.ChipsPerSub);
+
+	const UConfigPropertySection* Transfers = GetSection(Root, TEXT("Transfers"));
+	bChanged |= Read<UConfigPropertyBool>(Transfers, TEXT("Enabled"), Settings.bTransfersEnabled);
+	bChanged |= Read<UConfigPropertyInteger>(Transfers, TEXT("Min"), Settings.TransferMin);
+	bChanged |= Read<UConfigPropertyInteger>(Transfers, TEXT("Max"), Settings.TransferMax);
+	bChanged |= Read<UConfigPropertyInteger>(Transfers, TEXT("FeePercent"), Settings.TransferFeePercent);
+	bChanged |= Read<UConfigPropertyInteger>(Transfers, TEXT("SendPerDay"), Settings.TransferSendPerDay);
+	bChanged |= Read<UConfigPropertyInteger>(Transfers, TEXT("ReceivePerDay"), Settings.TransferReceivePerDay);
+	bChanged |= ReadSeconds(Transfers, TEXT("CooldownSeconds"), Settings.TransferCooldownSeconds);
 
 	const UConfigPropertySection* AutoChaos = GetSection(Root, TEXT("AutoChaos"));
 	bChanged |= Read<UConfigPropertyBool>(AutoChaos, TEXT("Enabled"), Settings.bAutoChaos);

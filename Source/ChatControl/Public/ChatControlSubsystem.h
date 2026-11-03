@@ -148,6 +148,10 @@ private:
 	int32 GetChaosBudgetUsed(double Now) const;
 	/** "!test <what> [amount]" from the streamer: simulates paid events without spending anything */
 	void HandleTestCommand(const FChatEvent& Event, const FString& Args);
+	/** "!give <nick> <amount>": chips from one viewer to another, with limits and a fee to the pot */
+	void HandleGiveCommand(const FChatEvent& Event, const FString& Args);
+	/** viewer key -> when they may transfer again */
+	TMap<FString, double> TransferCooldownUntil;
 
 	FChatControlSettings Settings;
 	FChatEconomy Economy;

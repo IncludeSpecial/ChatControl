@@ -26,6 +26,15 @@ Everything is set in the game: **Mods -> ChatControl**. Changes apply within a s
 - **First message bonus** (20) - once per session.
 - **Chips per bit** (2), **Chips per sub** (500) - subs, resubs, memberships and each gifted sub.
 
+## Chip transfers (!give)
+- **Viewers can give chips** (on).
+- **Smallest transfer** (10), **Biggest transfer** (500).
+- **Fee to the pot (%)** (10) - the receiver gets the amount minus the fee, the fee goes to the shared pot.
+- **Send limit per day** (1000), **Receive limit per day** (1000) - per viewer and calendar day, 0 = no limit.
+- **Cooldown between transfers (s)** (60).
+
+Limits keep viewers from pooling everything on one account or farming chips with second accounts.
+
 ## Effects
 Grouped by kind. Every effect has its own block:
 - **On** - the command works at all.

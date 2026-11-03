@@ -87,6 +87,65 @@ const FChatViewerRecord* FChatEconomy::FindByName(const FString& DisplayName) co
 	return nullptr;
 }
 
+FString FChatEconomy::FindKeyByName(const FString& DisplayName, const FString& PreferredPlatform) const
+{
+	FString Found;
+	for (const auto& Pair : Data.Viewers)
+	{
+		if (Pair.Key.StartsWith(TEXT("system:")) || !Pair.Value.DisplayName.Equals(DisplayName, ESearchCase::IgnoreCase))
+		{
+			continue;
+		}
+		if (Pair.Key.StartsWith(PreferredPlatform + TEXT(":")))
+		{
+			return Pair.Key;
+		}
+		Found = Pair.Key;
+	}
+	return Found;
+}
+
+EChipTransfer FChatEconomy::Transfer(const FString& FromKey, const FString& ToKey, int32 Amount, int32 Fee, int32 SendLimit, int32 ReceiveLimit, int32& OutLeft)
+{
+	FChatViewerRecord* From = Data.Viewers.Find(FromKey);
+	FChatViewerRecord* To = Data.Viewers.Find(ToKey);
+	OutLeft = 0;
+	if (!From || !To || From->Chips < Amount)
+	{
+		OutLeft = From ? From->Chips : 0;
+		return EChipTransfer::NotEnoughChips;
+	}
+	// Counters start over every calendar day
+	const FString Today = FDateTime::Now().ToString(TEXT("%Y-%m-%d"));
+	for (FChatViewerRecord* Record : { From, To })
+	{
+		if (Record->TransferDay != Today)
+		{
+			Record->TransferDay = Today;
+			Record->SentToday = 0;
+			Record->ReceivedToday = 0;
+		}
+	}
+	const int32 Received = Amount - Fee;
+	if (SendLimit > 0 && From->SentToday + Amount > SendLimit)
+	{
+		OutLeft = FMath::Max(0, SendLimit - From->SentToday);
+		return EChipTransfer::SenderDailyLimit;
+	}
+	if (ReceiveLimit > 0 && To->ReceivedToday + Received > ReceiveLimit)
+	{
+		OutLeft = FMath::Max(0, ReceiveLimit - To->ReceivedToday);
+		return EChipTransfer::ReceiverDailyLimit;
+	}
+	From->Chips -= Amount;
+	From->SentToday += Amount;
+	To->Chips += Received;
+	To->ReceivedToday += Received;
+	Data.Pot += Fee;
+	bDirty = true;
+	return EChipTransfer::Done;
+}
+
 bool FChatEconomy::TrySpend(const FString& Key, int32 Amount)
 {
 	FChatViewerRecord* Record = Data.Viewers.Find(Key);

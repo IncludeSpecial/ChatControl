@@ -12,6 +12,7 @@
   - Health bar, stage and the summoner's name above the boss, and a new OBS widget `http://localhost:8787/obs/boss.html`.
   - Victory drops a loot crate and pays every active viewer; if the titan wins, the summoner gets chips.
   - Default goal of the shared pot for new installs; raids with 60+ viewers bring a titan. `!test titan <boss>` picks a boss.
+- **Chip transfers**: `!give <nick> <amount>` / `!передать`, with limits per transfer and per day, a cooldown and a fee to the shared pot. All configurable.
 - **OBS port** applies at once, without restarting the game.
 
 ### Fixed

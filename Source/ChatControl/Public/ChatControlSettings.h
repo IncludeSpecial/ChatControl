@@ -167,6 +167,19 @@ struct FChatControlSettings
 	UPROPERTY() int32 FirstMessageBonus = 20;
 	UPROPERTY() int32 ChipsPerBit = 2;
 	UPROPERTY() int32 ChipsPerSub = 500;
+
+	// --- Chip transfers (!give) ---
+	UPROPERTY() bool bTransfersEnabled = true;
+	/** Smallest and biggest amount per transfer */
+	UPROPERTY() int32 TransferMin = 10;
+	UPROPERTY() int32 TransferMax = 500;
+	/** Share of each transfer that goes to the shared pot instead of the receiver */
+	UPROPERTY() int32 TransferFeePercent = 10;
+	/** Chips one viewer may send / receive per calendar day; 0 = no limit */
+	UPROPERTY() int32 TransferSendPerDay = 1000;
+	UPROPERTY() int32 TransferReceivePerDay = 1000;
+	/** Seconds between two transfers of the same viewer */
+	UPROPERTY() float TransferCooldownSeconds = 60.f;
 	/** Extra price multiplier per active viewer above one, capped by MaxCostMultiplier */
 	UPROPERTY() float CostScalePerViewer = 0.05f;
 	UPROPERTY() float MaxCostMultiplier = 3.f;
