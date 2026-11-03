@@ -609,7 +609,11 @@ void UChatControlSubsystem::HandleTestCommand(const FChatEvent& Event, const FSt
 	}
 	else if (const FChatEffect* Effect = Effects.Find(What))
 	{
-		ExecuteEffect(*Effect, Event.GetEconomyKey(), Event.DisplayName, AmountText);
+		if (!ExecuteEffect(*Effect, Event.GetEconomyKey(), Event.DisplayName, AmountText))
+		{
+			Announce(Tr(TEXT("[test] The effect can't run right now: creatures and titans wait away from the HUB, one titan at a time."),
+				TEXT("[тест] Эффект сейчас не сработал: существа и титаны не появляются у ХАБа, а титан может быть только один.")));
+		}
 	}
 	else if (static const TSet<FString> ChatCommands = { TEXT("chips"), TEXT("чипы"), TEXT("daily"), TEXT("бонус"), TEXT("effects"), TEXT("help"),
 		TEXT("pause"), TEXT("panic"), TEXT("clear"), TEXT("убрать"), TEXT("vote"), TEXT("голос"), TEXT("pot"), TEXT("копилка"),

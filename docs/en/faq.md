@@ -20,6 +20,9 @@ or make the wait longer.
 - Turn off single effects in **Effects** or take them out of the random pool (**In random**).
 - A bigger **Safe zone around the HUB** keeps creatures away from your base.
 
+### A giant boss is still in my save after loading
+A titan that was alive when the game was saved comes back after loading, without its health bar and time limit. Just kill it.
+
 ### Does it work in multiplayer?
 Not yet. The mod is made for singleplayer.
 

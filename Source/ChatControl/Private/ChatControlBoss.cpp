@@ -365,19 +365,22 @@ void UChatControlSubsystem::TickBoss(double Now)
 	APawn* Boss = BossFight.Boss.Get();
 	UFGHealthComponent* Health = BossFight.Health.Get();
 	AFGCharacterPlayer* Player = FindPlayer();
-	if (!Boss || !Health)
+	const FBossType& Type = BossTypes[BossFight.Type];
+	// The game may remove the corpse on the tick it dies: almost no health left last tick counts as a kill
+	const bool bKilled = Health ? Health->IsDead() : BossFight.LastHealth > 0.f && BossFight.LastHealth <= BossFight.MaxHealth * 0.05f;
+	if (!bKilled && (!Boss || !Health))
 	{
 		// Removed by !panic, unloaded with the world, or its lifespan ran out
 		EndBossFight(false);
 		return;
 	}
-	const FBossType& Type = BossTypes[BossFight.Type];
 
-	if (Health->IsDead())
+	if (bKilled)
 	{
+		const FVector LootLocation = Boss ? Boss->GetActorLocation() : Player ? Player->GetActorLocation() + Player->GetActorForwardVector() * 300.f : FVector::ZeroVector;
 		Announce(FText::Format(Tr(TEXT("VICTORY! {0} is defeated!"), TEXT("ПОБЕДА! {0} повержен(а)!")), FText::FromString(BossFight.Title)));
 		const int32 Loot = Type.Kind == EBossKind::Peaceful ? 10 : 6;
-		if (Player && ChatEffects::DropLootCrate(GetGameWorld(), Player, Boss->GetActorLocation() + FVector(0, 0, 100.f), Loot, 0.6f))
+		if (Player && ChatEffects::DropLootCrate(GetGameWorld(), Player, LootLocation + FVector(0, 0, 100.f), Loot, 0.6f))
 		{
 			Announce(Tr(TEXT("It dropped a crate full of loot!"), TEXT("Из него выпал ящик с лутом!")));
 		}
@@ -436,7 +439,11 @@ void UChatControlSubsystem::TickBoss(double Now)
 	{
 		Dilation *= 1.f + (1.f - Fraction) * 0.8f;
 	}
-	Boss->CustomTimeDilation = Dilation;
+	// !dance freezes creatures with a tiny time dilation; don't undo it
+	if (Boss->CustomTimeDilation >= 0.01f)
+	{
+		Boss->CustomTimeDilation = Dilation;
+	}
 
 	if ((BossFight.Traits & Undying) && Now >= BossFight.NextRegenTime)
 	{
