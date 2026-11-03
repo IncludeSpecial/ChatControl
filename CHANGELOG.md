@@ -6,8 +6,8 @@
 - **Titans (`!titan`)**: a real boss fight instead of a single monster.
   - 13 bosses with their own fights: Hog King, Cliff Tyrant, Nuclear Hog, Stinger Queen, Stinger Lord, four Spitter Matriarchs
     (green, fire, sand, deep), Nest Mother (lays crab nests), and loot titans that stomp (Sky Giraffe, Colossal Beetle, Giant Strider).
-  - 10 random traits that change the fight and the name: Armored, Swift, Colossal, Undying, Summoning, Nocturnal, Misty,
-    Sparking, Bloodthirsty, Rabid.
+  - 12 random traits that change the fight and the name: Armored, Swift, Colossal, Undying, Summoning, Nocturnal, Misty,
+    Sparking, Bloodthirsty, Rabid, Radioactive, with a Jetpack.
   - Bigger size, many times more health, they go straight for the streamer, three stages (at 66% and 33%) with rage, minions, swarms, night and fog.
   - Health bar, stage and the summoner's name above the boss, and a new OBS widget `http://localhost:8787/obs/boss.html`.
   - Victory drops a loot crate and pays every active viewer; if the titan wins, the summoner gets chips.

@@ -97,7 +97,8 @@ Green, Fire, Sand and Deep Matriarch (spitters of other elements, night and fog)
 and loot titans - Sky Giraffe, Colossal Beetle, Giant Strider - that follow you, stomp when you get close, charge at you, leap and slam the ground from stage 2, and drop loot at every stage.
 
 **Traits:** Armored (more health), Swift (faster), Colossal (bigger), Undying (heals when left alone), Summoning (minions every 30 s),
-Nocturnal (night), Misty (fog), Sparking (blackout at stage 2), Bloodthirsty (heals when it hits you), Rabid (faster as it gets hurt).
+Nocturnal (night), Misty (fog), Sparking (blackout at stage 2), Bloodthirsty (heals when it hits you), Rabid (faster as it gets hurt), Radioactive (hurts you within 10 m),
+with a Jetpack (flies at you every few seconds and lands with a shockwave).
 
 **Stages:** at 66% the boss gets angry and calls help, at 33% it goes all in. One titan at a time; another one waits in the queue.
 **Victory:** a loot crate and 50 chips for every active viewer. **Defeat:** the summoner gets 200 chips. After 5 minutes the titan leaves.

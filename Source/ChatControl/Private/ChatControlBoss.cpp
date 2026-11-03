@@ -73,6 +73,7 @@ namespace
 	{
 		Armored = 1 << 0, Swift = 1 << 1, Colossal = 1 << 2, Undying = 1 << 3, Summoning = 1 << 4,
 		Nocturnal = 1 << 5, Misty = 1 << 6, Sparking = 1 << 7, Bloodthirsty = 1 << 8, Rabid = 1 << 9,
+		Radioactive = 1 << 10, Jetpack = 1 << 11,
 	};
 
 	struct FBossTraitInfo
@@ -83,19 +84,23 @@ namespace
 		const TCHAR* RussianFeminine;
 		/** Makes sense for peaceful wildlife too */
 		bool bPeaceful;
+		/** Goes after the boss name: "Hog King with a Jetpack" */
+		bool bSuffix;
 	};
 
 	const FBossTraitInfo BossTraits[] = {
-		{ Armored,      TEXT("Armored"),      TEXT("Бронированный"), TEXT("Бронированная"), true },
-		{ Swift,        TEXT("Swift"),        TEXT("Стремительный"), TEXT("Стремительная"), false },
-		{ Colossal,     TEXT("Colossal"),     TEXT("Исполинский"),   TEXT("Исполинская"),   true },
-		{ Undying,      TEXT("Undying"),      TEXT("Живучий"),       TEXT("Живучая"),       true },
-		{ Summoning,    TEXT("Summoning"),    TEXT("Призывающий"),   TEXT("Призывающая"),   false },
-		{ Nocturnal,    TEXT("Nocturnal"),    TEXT("Ночной"),        TEXT("Ночная"),        true },
-		{ Misty,        TEXT("Misty"),        TEXT("Туманный"),      TEXT("Туманная"),      true },
-		{ Sparking,     TEXT("Sparking"),     TEXT("Искрящий"),      TEXT("Искрящая"),      false },
-		{ Bloodthirsty, TEXT("Bloodthirsty"), TEXT("Кровожадный"),   TEXT("Кровожадная"),   false },
-		{ Rabid,        TEXT("Rabid"),        TEXT("Бешеный"),       TEXT("Бешеная"),       false },
+		{ Armored,      TEXT("Armored"),      TEXT("Бронированный"), TEXT("Бронированная"), true,  false },
+		{ Swift,        TEXT("Swift"),        TEXT("Стремительный"), TEXT("Стремительная"), false, false },
+		{ Colossal,     TEXT("Colossal"),     TEXT("Исполинский"),   TEXT("Исполинская"),   true,  false },
+		{ Undying,      TEXT("Undying"),      TEXT("Живучий"),       TEXT("Живучая"),       true,  false },
+		{ Summoning,    TEXT("Summoning"),    TEXT("Призывающий"),   TEXT("Призывающая"),   false, false },
+		{ Nocturnal,    TEXT("Nocturnal"),    TEXT("Ночной"),        TEXT("Ночная"),        true,  false },
+		{ Misty,        TEXT("Misty"),        TEXT("Туманный"),      TEXT("Туманная"),      true,  false },
+		{ Sparking,     TEXT("Sparking"),     TEXT("Искрящий"),      TEXT("Искрящая"),      false, false },
+		{ Bloodthirsty, TEXT("Bloodthirsty"), TEXT("Кровожадный"),   TEXT("Кровожадная"),   false, false },
+		{ Rabid,        TEXT("Rabid"),        TEXT("Бешеный"),       TEXT("Бешеная"),       false, false },
+		{ Radioactive,  TEXT("Radioactive"),  TEXT("Радиоактивный"), TEXT("Радиоактивная"), true,  false },
+		{ Jetpack,      TEXT("with a Jetpack"), TEXT("с реактивным ранцем"), TEXT("с реактивным ранцем"), true, true },
 	};
 
 	const TCHAR* const TitanKey = TEXT("system:titan");
@@ -199,11 +204,13 @@ bool UChatControlSubsystem::StartTitan(const FString& ViewerKey, const FString& 
 
 	// "Bloodthirsty Armored Hog King" / "Кровожадный Бронированный Король кабанов"
 	TArray<FString> Words;
+	TArray<FString> Suffixes;
 	for (const FBossTraitInfo* Info : Picked)
 	{
-		Words.Add(ChatText::IsRussian() ? (Boss.bFeminine ? Info->RussianFeminine : Info->RussianMasculine) : Info->English);
+		(Info->bSuffix ? Suffixes : Words).Add(ChatText::IsRussian() ? (Boss.bFeminine ? Info->RussianFeminine : Info->RussianMasculine) : Info->English);
 	}
 	Words.Add(ChatText::IsRussian() ? Boss.Russian : Boss.English);
+	Words.Append(Suffixes);
 
 	BossFight = FBossFight();
 	BossFight.bActive = true;
@@ -326,6 +333,14 @@ void UChatControlSubsystem::SpawnTitan()
 			ExecuteEffect(*WorldEffect, TitanKey, BossFight.Title);
 		}
 	};
+	if (BossFight.Traits & Radioactive)
+	{
+		Announce(Tr(TEXT("It glows with radiation - keep your distance!"), TEXT("Он фонит радиацией - держи дистанцию!")));
+	}
+	if (BossFight.Traits & Jetpack)
+	{
+		Announce(Tr(TEXT("It wears a jetpack - watch the sky!"), TEXT("У него реактивный ранец - следи за небом!")));
+	}
 	if (BossFight.Traits & Nocturnal)
 	{
 		RunWorldEffect(TEXT("night"));
@@ -565,9 +580,9 @@ void UChatControlSubsystem::TickBoss(double Now)
 			BossFight.bLeaping = false;
 			Shockwave(Player, Boss->GetActorLocation(), Radius + 900.f, 30.f * DamageScale, 1300.f, Boss);
 		}
-		else if (Movement && !BossFight.bLeaping && BossFight.Stage >= 2 && Now >= BossFight.NextLeapTime && Distance < 4000.f && Movement->IsMovingOnGround())
+		else if (Movement && !BossFight.bLeaping && (BossFight.Stage >= 2 || (BossFight.Traits & Jetpack)) && Now >= BossFight.NextLeapTime && Distance < 4000.f && Movement->IsMovingOnGround())
 		{
-			BossFight.NextLeapTime = Now + (BossFight.Stage >= 3 ? 10.0 : 14.0);
+			BossFight.NextLeapTime = Now + ((BossFight.Traits & Jetpack) ? 7.0 : BossFight.Stage >= 3 ? 10.0 : 14.0);
 			BossFight.bLeaping = true;
 			BossFight.LeapStartTime = Now;
 			// About 1.3 s in the air: horizontal speed covers the distance, vertical speed brings it back down
@@ -575,6 +590,39 @@ void UChatControlSubsystem::TickBoss(double Now)
 			const float AirTime = 1.3f;
 			const FVector Toward = Player->GetActorLocation() - Boss->GetActorLocation();
 			Beast->LaunchCharacter(FVector(Toward.X, Toward.Y, 0.f) / AirTime + FVector(0, 0, 0.5f * Gravity * AirTime), true, true);
+		}
+	}
+	if ((BossFight.Traits & Radioactive) && Player && Now >= BossFight.NextRadiationTime)
+	{
+		// Radiation: the closer, the more it hurts; no push
+		BossFight.NextRadiationTime = Now + 1.0;
+		const float Distance = FVector::Dist(Player->GetActorLocation(), Boss->GetActorLocation());
+		if (Distance < 1000.f && Player->GetHealthComponent())
+		{
+			const float Damage = FMath::Lerp(6.f, 1.5f, Distance / 1000.f) * (Settings.Difficulty >= 3 ? 1.5f : Settings.Difficulty <= 1 ? 0.6f : 1.f);
+			Player->GetHealthComponent()->TakeDamage(Player, Damage, GetDefault<UDamageType>(), nullptr, Boss);
+		}
+	}
+	if ((BossFight.Traits & Jetpack) && Type.Kind != EBossKind::Peaceful && Player)
+	{
+		// Jetpack: a high arc that lands next to the player with a shockwave
+		ACharacter* Flyer = Cast<ACharacter>(Boss);
+		UCharacterMovementComponent* Movement = Flyer ? Flyer->GetCharacterMovement() : nullptr;
+		if (Movement && BossFight.bLeaping && Now - BossFight.LeapStartTime > 0.4 && Movement->IsMovingOnGround())
+		{
+			BossFight.bLeaping = false;
+			Shockwave(Player, Boss->GetActorLocation(), 900.f, 20.f * (Settings.Difficulty >= 3 ? 1.5f : Settings.Difficulty <= 1 ? 0.6f : 1.f), 1100.f, Boss);
+		}
+		else if (Movement && !BossFight.bLeaping && Now >= BossFight.NextLeapTime && Movement->IsMovingOnGround()
+			&& FVector::Dist2D(Player->GetActorLocation(), Boss->GetActorLocation()) < 4000.f)
+		{
+			BossFight.NextLeapTime = Now + (BossFight.Stage >= 3 ? 5.0 : 8.0);
+			BossFight.bLeaping = true;
+			BossFight.LeapStartTime = Now;
+			const float Gravity = FMath::Abs(Movement->GetGravityZ());
+			const float AirTime = 1.6f;
+			const FVector Toward = Player->GetActorLocation() - Boss->GetActorLocation();
+			Flyer->LaunchCharacter(FVector(Toward.X, Toward.Y, 0.f) / AirTime + FVector(0, 0, 0.5f * Gravity * AirTime), true, true);
 		}
 	}
 	const bool bPeriodicSummons = (BossFight.Traits & Summoning) || Type.Kind == EBossKind::Hatcher;

@@ -260,6 +260,7 @@ private:
 		double NextAggroTime = 0.0;
 		double NextStompTime = 0.0;
 		double NextChargeTime = 0.0;
+		double NextRadiationTime = 0.0;
 		double NextLeapTime = 0.0;
 		double LeapStartTime = 0.0;
 		bool bLeaping = false;
