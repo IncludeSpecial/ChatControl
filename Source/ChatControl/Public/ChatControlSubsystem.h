@@ -244,6 +244,9 @@ private:
 		double LastDamageTime = 0.0;
 		double NextSummonTime = 0.0;
 		double NextRegenTime = 0.0;
+		double NextAggroTime = 0.0;
+		double NextStompTime = 0.0;
+		TArray<TWeakObjectPtr<APawn>> Minions;
 	};
 	FBossFight BossFight;
 	void SpawnTitan();

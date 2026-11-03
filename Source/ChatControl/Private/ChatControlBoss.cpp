@@ -6,6 +6,9 @@
 #include "FGCharacterPlayer.h"
 #include "FGHealthComponent.h"
 #include "Creature/FGCreature.h"
+#include "Creature/Enemy/FGCrabHatcher.h"
+#include "AI/FGCreatureController.h"
+#include "AIController.h"
 #include "GameFramework/Character.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/WidgetComponent.h"
@@ -50,19 +53,19 @@ namespace
 	};
 
 	const FBossType BossTypes[] = {
-		{ TEXT("hogking"),  TEXT("Hog King"),        TEXT("Король кабанов"),     false, TEXT("/Game/FactoryGame/Character/Creature/Enemy/Hog/AlphaHog/Char_AlphaHog.Char_AlphaHog_C"), 2.0f, 8.f, EBossKind::Melee, 10, { Hog, Hog } },
-		{ TEXT("cliff"),    TEXT("Cliff Tyrant"),    TEXT("Скальный тиран"),     false, TEXT("/Game/FactoryGame/Character/Creature/Enemy/Hog/CliffHog/Char_CliffHog.Char_CliffHog_C"), 1.8f, 8.f, EBossKind::Melee, 8, { Hog, Hog } },
-		{ TEXT("nuclear"),  TEXT("Nuclear Hog"),     TEXT("Ядерный кабан"),      false, NuclearHog, 2.0f, 6.f, EBossKind::Nuclear, 6, { NuclearHog, Hog } },
-		{ TEXT("queen"),    TEXT("Stinger Queen"),   TEXT("Королева жал"),       true,  TEXT("/Game/FactoryGame/Character/Creature/Enemy/Stinger/BigStinger/Char_EliteStinger.Char_EliteStinger_C"), 1.8f, 6.f, EBossKind::Swarm, 10, { SmallStinger, SmallStinger } },
-		{ TEXT("stinger"),  TEXT("Stinger Lord"),    TEXT("Повелитель жал"),     false, TEXT("/Game/FactoryGame/Character/Creature/Enemy/Stinger/Char_Stinger.Char_Stinger_C"), 2.2f, 8.f, EBossKind::Swarm, 6, { SmallStinger, SmallStinger } },
-		{ TEXT("green"),    TEXT("Green Matriarch"), TEXT("Зелёный матриарх"),   false, TEXT("/Game/FactoryGame/Character/Creature/Enemy/Spitter/SpitterForest/Char_SpitterForestAlpha.Char_SpitterForestAlpha_C"), 1.8f, 6.f, EBossKind::Spitter, 7, { ForestSpitter, DesertSpitter } },
-		{ TEXT("fire"),     TEXT("Fire Matriarch"),  TEXT("Огненный матриарх"),  false, TEXT("/Game/FactoryGame/Character/Creature/Enemy/Spitter/SpitterForestRed/Char_SpitterForestRedAlpha.Char_SpitterForestRedAlpha_C"), 1.8f, 6.f, EBossKind::Spitter, 7, { RedSpitter, ForestSpitter } },
-		{ TEXT("sand"),     TEXT("Sand Matriarch"),  TEXT("Песчаный матриарх"),  false, TEXT("/Game/FactoryGame/Character/Creature/Enemy/Spitter/SpitterDesert/Char_SpitterDesertAlpha.Char_SpitterDesertAlpha_C"), 1.8f, 6.f, EBossKind::Spitter, 7, { DesertSpitter, RedSpitter } },
-		{ TEXT("deep"),     TEXT("Deep Matriarch"),  TEXT("Глубинный матриарх"), false, TEXT("/Game/FactoryGame/Character/Creature/Enemy/Spitter/SpitterAquatic/Char_SpitterAquaticAlpha.Char_SpitterAquaticAlpha_C"), 1.8f, 6.f, EBossKind::Spitter, 5, { AquaticSpitter, ForestSpitter } },
-		{ TEXT("crabs"),    TEXT("Crab Mother"),     TEXT("Мать крабов"),        true,  TEXT("/Game/FactoryGame/Character/Creature/Enemy/CrabHatcher/Char_BigCrabHatcher.Char_BigCrabHatcher_C"), 1.6f, 5.f, EBossKind::Hatcher, 7, { CrabHatcher, CrabHatcher } },
-		{ TEXT("giraffe"),  TEXT("Sky Giraffe"),     TEXT("Небесный жираф"),     false, TEXT("/Game/FactoryGame/Character/Creature/Wildlife/SpaceGiraffe/Char_SpaceGiraffe.Char_SpaceGiraffe_C"), 3.0f, 4.f, EBossKind::Peaceful, 4, { nullptr, nullptr } },
-		{ TEXT("beetle"),   TEXT("Colossal Beetle"), TEXT("Жук-колосс"),         false, TEXT("/Game/FactoryGame/Character/Creature/Wildlife/Beetle/Char_Beetle.Char_Beetle_C"), 4.0f, 10.f, EBossKind::Peaceful, 3, { nullptr, nullptr } },
-		{ TEXT("strider"),  TEXT("Giant Strider"),   TEXT("Гигантский страус"),  false, TEXT("/Game/FactoryGame/Character/Creature/Wildlife/NonFlyingBird/Char_NonFlyingBird.Char_NonFlyingBird_C"), 3.0f, 6.f, EBossKind::Peaceful, 3, { nullptr, nullptr } },
+		{ TEXT("hogking"),  TEXT("Hog King"),        TEXT("Король кабанов"),     false, TEXT("/Game/FactoryGame/Character/Creature/Enemy/Hog/AlphaHog/Char_AlphaHog.Char_AlphaHog_C"), 1.4f, 12.f, EBossKind::Melee, 10, { Hog, Hog } },
+		{ TEXT("cliff"),    TEXT("Cliff Tyrant"),    TEXT("Скальный тиран"),     false, TEXT("/Game/FactoryGame/Character/Creature/Enemy/Hog/CliffHog/Char_CliffHog.Char_CliffHog_C"), 1.35f, 12.f, EBossKind::Melee, 8, { Hog, Hog } },
+		{ TEXT("nuclear"),  TEXT("Nuclear Hog"),     TEXT("Ядерный кабан"),      false, NuclearHog, 1.4f, 9.f, EBossKind::Nuclear, 6, { NuclearHog, Hog } },
+		{ TEXT("queen"),    TEXT("Stinger Queen"),   TEXT("Королева жал"),       true,  TEXT("/Game/FactoryGame/Character/Creature/Enemy/Stinger/BigStinger/Char_EliteStinger.Char_EliteStinger_C"), 1.35f, 9.f, EBossKind::Swarm, 10, { SmallStinger, SmallStinger } },
+		{ TEXT("stinger"),  TEXT("Stinger Lord"),    TEXT("Повелитель жал"),     false, TEXT("/Game/FactoryGame/Character/Creature/Enemy/Stinger/Char_Stinger.Char_Stinger_C"), 1.5f, 12.f, EBossKind::Swarm, 6, { SmallStinger, SmallStinger } },
+		{ TEXT("green"),    TEXT("Green Matriarch"), TEXT("Зелёный матриарх"),   false, TEXT("/Game/FactoryGame/Character/Creature/Enemy/Spitter/SpitterForest/Char_SpitterForestAlpha.Char_SpitterForestAlpha_C"), 1.35f, 9.f, EBossKind::Spitter, 7, { ForestSpitter, DesertSpitter } },
+		{ TEXT("fire"),     TEXT("Fire Matriarch"),  TEXT("Огненный матриарх"),  false, TEXT("/Game/FactoryGame/Character/Creature/Enemy/Spitter/SpitterForestRed/Char_SpitterForestRedAlpha.Char_SpitterForestRedAlpha_C"), 1.35f, 9.f, EBossKind::Spitter, 7, { RedSpitter, ForestSpitter } },
+		{ TEXT("sand"),     TEXT("Sand Matriarch"),  TEXT("Песчаный матриарх"),  false, TEXT("/Game/FactoryGame/Character/Creature/Enemy/Spitter/SpitterDesert/Char_SpitterDesertAlpha.Char_SpitterDesertAlpha_C"), 1.35f, 9.f, EBossKind::Spitter, 7, { DesertSpitter, RedSpitter } },
+		{ TEXT("deep"),     TEXT("Deep Matriarch"),  TEXT("Глубинный матриарх"), false, TEXT("/Game/FactoryGame/Character/Creature/Enemy/Spitter/SpitterAquatic/Char_SpitterAquaticAlpha.Char_SpitterAquaticAlpha_C"), 1.35f, 9.f, EBossKind::Spitter, 5, { AquaticSpitter, ForestSpitter } },
+		{ TEXT("crabs"),    TEXT("Nest Mother"),     TEXT("Матка гнёзд"),        true,  TEXT("/Game/FactoryGame/Character/Creature/Enemy/Stinger/Char_Stinger.Char_Stinger_C"), 1.3f, 10.f, EBossKind::Hatcher, 7, { CrabHatcher, SmallStinger } },
+		{ TEXT("giraffe"),  TEXT("Sky Giraffe"),     TEXT("Небесный жираф"),     false, TEXT("/Game/FactoryGame/Character/Creature/Wildlife/SpaceGiraffe/Char_SpaceGiraffe.Char_SpaceGiraffe_C"), 2.0f, 6.f, EBossKind::Peaceful, 4, { nullptr, nullptr } },
+		{ TEXT("beetle"),   TEXT("Colossal Beetle"), TEXT("Жук-колосс"),         false, TEXT("/Game/FactoryGame/Character/Creature/Wildlife/Beetle/Char_Beetle.Char_Beetle_C"), 2.5f, 15.f, EBossKind::Peaceful, 3, { nullptr, nullptr } },
+		{ TEXT("strider"),  TEXT("Giant Strider"),   TEXT("Гигантский страус"),  false, TEXT("/Game/FactoryGame/Character/Creature/Wildlife/NonFlyingBird/Char_NonFlyingBird.Char_NonFlyingBird_C"), 2.0f, 8.f, EBossKind::Peaceful, 3, { nullptr, nullptr } },
 	};
 
 	enum EBossTrait : uint32
@@ -95,6 +98,17 @@ namespace
 	};
 
 	const TCHAR* const TitanKey = TEXT("system:titan");
+
+	/** Full aggro on the player, so a freshly spawned creature attacks instead of standing around */
+	void ProvokeCreature(APawn* Pawn, AActor* Player)
+	{
+		const AFGCreature* Creature = Cast<AFGCreature>(Pawn);
+		AFGCreatureController* Controller = Pawn ? Cast<AFGCreatureController>(Pawn->GetController()) : nullptr;
+		if (Creature && Controller && Player)
+		{
+			Controller->SetAggroForTarget(Player, FMath::Max(1.f, Creature->GetMaximumAggroLevel()), true);
+		}
+	}
 }
 
 bool UChatControlSubsystem::StartTitan(const FString& ViewerKey, const FString& ViewerName, const FChatEffectSettings& Effect, const FString& BossId)
@@ -193,8 +207,9 @@ void UChatControlSubsystem::SpawnTitan()
 		return;
 	}
 
-	const float MaxScale = Boss.Kind == EBossKind::Peaceful ? 5.f : 2.6f;
-	const float Scale = FMath::Min(MaxScale, Boss.Scale * ((BossFight.Traits & Colossal) ? 1.3f : 1.f));
+	// Above ~1.6x creatures get stuck: the AI navigation and attack areas are made for their normal size
+	const float MaxScale = Boss.Kind == EBossKind::Peaceful ? 2.6f : 1.6f;
+	const float Scale = FMath::Min(MaxScale, Boss.Scale * ((BossFight.Traits & Colossal) ? 1.15f : 1.f));
 	float Radius = 60.f, HalfHeight = 90.f;
 	if (const ACharacter* Default = Cast<ACharacter>(BossClass->GetDefaultObject()); Default && Default->GetCapsuleComponent())
 	{
@@ -257,17 +272,18 @@ void UChatControlSubsystem::SpawnTitan()
 	BossFight.MaxHealth = Health ? FMath::Max(1.f, Health->GetMaxHealth()) : 1.f;
 	BossFight.LastHealth = Health ? Health->GetCurrentHealth() : 0.f;
 	BossFight.PlayerLastHealth = Player->GetHealthComponent() ? Player->GetHealthComponent()->GetCurrentHealth() : 0.f;
-	BossFight.BaseDilation = (BossFight.Traits & Swift) ? 1.25f : 1.f;
+	BossFight.BaseDilation = (BossFight.Traits & Swift) ? 1.15f : 1.f;
 	BossFight.LastDamageTime = Now;
 	BossFight.NextSummonTime = Now + (Boss.Kind == EBossKind::Hatcher ? 20.0 : 30.0);
 	BossFight.NextRegenTime = Now + 1.0;
 	Pawn->CustomTimeDilation = BossFight.BaseDilation;
+	ProvokeCreature(Pawn, Player);
 	AttachBossBar(Pawn);
 
 	Announce(FText::Format(Tr(TEXT("{0} is here! Defeat it before it defeats you."), TEXT("{0} уже здесь! Победи, пока он не победил тебя.")), FText::FromString(BossFight.Title)));
 	if (Boss.Kind == EBossKind::Peaceful)
 	{
-		Announce(Tr(TEXT("This one is peaceful - but it carries loot."), TEXT("Этот мирный, но несёт лут.")));
+		Announce(Tr(TEXT("It carries loot - but it stomps anyone who gets too close!"), TEXT("Он несёт лут, но топчет всех, кто подойдёт близко!")));
 	}
 	// Traits that change the world for the whole fight
 	auto RunWorldEffect = [this](const TCHAR* EffectId)
@@ -434,11 +450,13 @@ void UChatControlSubsystem::TickBoss(double Now)
 	}
 
 	// Traits
-	float Dilation = BossFight.BaseDilation * (BossFight.Stage >= 3 && Type.Kind != EBossKind::Peaceful ? 1.4f : BossFight.Stage == 2 && Type.Kind == EBossKind::Melee ? 1.2f : 1.f);
+	float Dilation = BossFight.BaseDilation * (BossFight.Stage >= 3 && Type.Kind != EBossKind::Peaceful ? 1.25f : BossFight.Stage == 2 && Type.Kind == EBossKind::Melee ? 1.1f : 1.f);
 	if (BossFight.Traits & Rabid)
 	{
-		Dilation *= 1.f + (1.f - Fraction) * 0.8f;
+		Dilation *= 1.f + (1.f - Fraction) * 0.3f;
 	}
+	// Faster animations than this make attacks miss
+	Dilation = FMath::Min(Dilation, 1.45f);
 	// !dance freezes creatures with a tiny time dilation; don't undo it
 	if (Boss->CustomTimeDilation >= 0.01f)
 	{
@@ -462,6 +480,40 @@ void UChatControlSubsystem::TickBoss(double Now)
 			Health->Heal((BossFight.PlayerLastHealth - PlayerHealthNow) * 0.05f * BossFight.MaxHealth / FMath::Max(1.f, PlayerHealth->GetMaxHealth()));
 		}
 		BossFight.PlayerLastHealth = PlayerHealthNow;
+	}
+	if (Player && Now >= BossFight.NextAggroTime)
+	{
+		BossFight.NextAggroTime = Now + 3.0;
+		ProvokeCreature(Boss, Player);
+		BossFight.Minions.RemoveAll([](const TWeakObjectPtr<APawn>& Minion) { return !Minion.IsValid(); });
+		for (const TWeakObjectPtr<APawn>& Minion : BossFight.Minions)
+		{
+			ProvokeCreature(Minion.Get(), Player);
+		}
+		if (Type.Kind == EBossKind::Peaceful)
+		{
+			// Wildlife has no attack: walk it to the player instead
+			if (AAIController* Controller = Cast<AAIController>(Boss->GetController()))
+			{
+				Controller->MoveToActor(Player, 250.f);
+			}
+		}
+	}
+	if (Type.Kind == EBossKind::Peaceful && Player && Now >= BossFight.NextStompTime)
+	{
+		// Stomp: hurts and throws the player back when they stand too close
+		BossFight.NextStompTime = Now + 2.0;
+		float Radius = 150.f, HalfHeight = 100.f;
+		if (const ACharacter* Character = Cast<ACharacter>(Boss); Character && Character->GetCapsuleComponent())
+		{
+			Character->GetCapsuleComponent()->GetScaledCapsuleSize(Radius, HalfHeight);
+		}
+		const FVector Away = (Player->GetActorLocation() - Boss->GetActorLocation()).GetSafeNormal2D();
+		if (FVector::Dist2D(Player->GetActorLocation(), Boss->GetActorLocation()) < Radius + 450.f && Player->GetHealthComponent())
+		{
+			Player->GetHealthComponent()->TakeDamage(Player, 10.f * (Settings.Difficulty >= 3 ? 1.5f : Settings.Difficulty <= 1 ? 0.6f : 1.f), GetDefault<UDamageType>(), nullptr, Boss);
+			Player->LaunchCharacter(Away * 900.f + FVector(0, 0, 450.f), true, true);
+		}
 	}
 	const bool bPeriodicSummons = (BossFight.Traits & Summoning) || Type.Kind == EBossKind::Hatcher;
 	if (bPeriodicSummons && Type.Kind != EBossKind::Peaceful && Now >= BossFight.NextSummonTime)
@@ -562,7 +614,26 @@ int32 UChatControlSubsystem::SummonMinions(int32 Count)
 	for (int32 i = 0; i < Total; ++i)
 	{
 		const TCHAR* Path = Type.Minions[FMath::RandRange(0, 1)];
-		UClass* MinionClass = LoadClass<APawn>(nullptr, Path ? Path : Type.Minions[0]);
+		UClass* AnyClass = LoadClass<AActor>(nullptr, Path ? Path : Type.Minions[0]);
+		if (AnyClass && AnyClass->IsChildOf(AFGCrabHatcher::StaticClass()))
+		{
+			// A crab nest on the ground that bursts into flying crabs when the player is near
+			FVector NestLocation;
+			if (ChatEffects::FindCreatureSpot(World, Player, Settings, 120.f, 60.f, NestLocation))
+			{
+				FActorSpawnParameters NestParams;
+				NestParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+				if (AFGCrabHatcher* Nest = World->SpawnActor<AFGCrabHatcher>(AnyClass, NestLocation - FVector(0, 0, 60.f), FRotator(0.f, FMath::FRandRange(0.f, 360.f), 0.f), NestParams))
+				{
+					Nest->SetLifeSpan(FMath::Max(10.f, Settings.CreatureLifeSpanSeconds));
+					Nest->RegisterHostilePlayer(Player);
+					TrackSpawned(Nest);
+					++Spawned;
+				}
+			}
+			continue;
+		}
+		UClass* MinionClass = AnyClass && AnyClass->IsChildOf(APawn::StaticClass()) ? AnyClass : nullptr;
 		float Radius = 60.f, HalfHeight = 90.f;
 		if (const ACharacter* Default = MinionClass ? Cast<ACharacter>(MinionClass->GetDefaultObject()) : nullptr; Default && Default->GetCapsuleComponent())
 		{
@@ -590,6 +661,8 @@ int32 UChatControlSubsystem::SummonMinions(int32 Count)
 		}
 		Minion->SetLifeSpan(FMath::Max(10.f, Settings.CreatureLifeSpanSeconds));
 		TrackSpawned(Minion);
+		ProvokeCreature(Minion, Player);
+		BossFight.Minions.Add(Minion);
 		++Spawned;
 	}
 	UE_LOG(LogChatControl, Log, TEXT("Titan: %d minion(s) summoned"), Spawned);

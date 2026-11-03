@@ -92,8 +92,8 @@ Creatures carry the viewer's name and rank, leave after 5 minutes and never spaw
 | `!titan` | 1000 | A boss fight after a 5-8 s warning: a random boss with 1-2 random traits, three stages and a health bar |
 
 **Bosses:** Hog King, Cliff Tyrant, Nuclear Hog (its minions explode), Stinger Queen and Stinger Lord (swarms),
-Green, Fire, Sand and Deep Matriarch (spitters of other elements, night and fog), Crab Mother (hatches crabs all the time),
-and peaceful loot titans - Sky Giraffe, Colossal Beetle, Giant Strider - that do not attack but drop loot at every stage.
+Green, Fire, Sand and Deep Matriarch (spitters of other elements, night and fog), Nest Mother (lays crab nests that burst into flying crabs),
+and loot titans - Sky Giraffe, Colossal Beetle, Giant Strider - that follow you, stomp when you get close and drop loot at every stage.
 
 **Traits:** Armored (more health), Swift (faster), Colossal (bigger), Undying (heals when left alone), Summoning (minions every 30 s),
 Nocturnal (night), Misty (fog), Sparking (blackout at stage 2), Bloodthirsty (heals when it hits you), Rabid (faster as it gets hurt).
