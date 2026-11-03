@@ -17,6 +17,16 @@
                  transform-origin: left; animation: bar var(--life) linear forwards; }
   .card.alert { border-left-color: #e5484d; }
   .card.alert::after { background: #e5484d; }
+  /* Events of the mod's author: rainbow edge and a glitchy text */
+  .card.dev { border-left-color: transparent; border-image: linear-gradient(180deg, #ff2a4a, #ffb02a, #4cff7a, #19e3ff, #b57bff) 1; }
+  .card.dev::after { background: linear-gradient(90deg, #ff2a4a, #ffb02a, #4cff7a, #19e3ff, #b57bff); }
+  .card.dev .t { display: block; animation: dev 2.4s steps(1) infinite; }
+  @keyframes dev {
+    0%, 86%, 100% { text-shadow: none; transform: none; }
+    88% { text-shadow: -3px 0 #ff2a4a, 3px 0 #19e3ff; transform: translateX(-2px) skewX(-6deg); }
+    92% { text-shadow: 3px 0 #ff2a4a, -3px 0 #19e3ff; transform: translateX(2px); }
+    96% { text-shadow: -2px 0 #ff2a4a, 2px 0 #19e3ff; transform: none; }
+  }
   @keyframes bar { from { transform: scaleX(1); } to { transform: scaleX(0); } }
   @keyframes in { from { transform: translateX(-40px); opacity: 0; } to { transform: none; opacity: 1; } }
   @keyframes out { to { opacity: 0; transform: translateX(-30px); } }
@@ -42,8 +52,13 @@
       if (e.id <= lastId) continue;
       lastId = e.id;
       const card = document.createElement("div");
-      card.className = "card plate" + (/БОСС|BOSS|ПАНИКА|PANIC/.test(e.text) ? " alert" : "");
-      card.textContent = e.text;
+      const text = e.text.toLowerCase();
+      const dev = (state.developers || []).some(n => text.includes(n));
+      card.className = "card plate" + (dev ? " dev" : /БОСС|BOSS|ПАНИКА|PANIC/.test(e.text) ? " alert" : "");
+      const t = document.createElement("span");
+      t.className = "t";
+      t.textContent = e.text;
+      card.appendChild(t);
       feed.prepend(card);
       setTimeout(() => card.remove(), SHOW_MS + 700);
       while (feed.children.length > MAX_CARDS) feed.lastChild.remove();

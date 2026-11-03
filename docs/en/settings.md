@@ -68,6 +68,7 @@ Grouped by kind. Every effect has its own block:
 - **Pet for a subscription** (on), **Pets stay forever** (on) - kept in the save; off = they leave after **Pets stay for (s)** (1800).
 - **Chance a pet comes tamed** (0.5) - 0 = never, 1 = always.
 - **Viewer names above creatures** (on).
+- **Highlight the mod developer** (on) - when the author of ChatControl chats on your stream: a one-time greeting, a "Mod developer" title and a rainbow glitch name tag, highlighted events in the OBS feed. Recognized by Twitch account id, not by name.
 - **Name color by chat role** (on) and the colors (hex): streamer `#FF2A4A`, moderators `#19E3FF`, VIP `#FF6AD5`,
   subscribers and members `#B57BFF`. Viewers without a role keep the usual color.
 

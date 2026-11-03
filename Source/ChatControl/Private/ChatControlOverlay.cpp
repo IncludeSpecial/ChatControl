@@ -266,6 +266,16 @@ FString UChatControlSubsystem::BuildOverlayJson() const
 	Chaos->SetBoolField(TEXT("youtube"), YouTube.IsValid() && YouTube->IsConnected());
 	Root->SetObjectField(TEXT("chaos"), Chaos);
 	Root->SetObjectField(TEXT("boss"), BuildBossJson());
+	// The OBS feed highlights events that mention the mod's author
+	TArray<TSharedPtr<FJsonValue>> Developers;
+	if (Settings.bShowDeveloper)
+	{
+		for (const FString& Developer : GetDeveloperNames())
+		{
+			Developers.Add(MakeShared<FJsonValueString>(Developer));
+		}
+	}
+	Root->SetArrayField(TEXT("developers"), Developers);
 	// Built-in widgets label themselves in the mod language
 	Root->SetStringField(TEXT("language"), ChatText::IsRussian() ? TEXT("ru") : TEXT("en"));
 

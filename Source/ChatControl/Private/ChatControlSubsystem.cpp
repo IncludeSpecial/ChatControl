@@ -14,6 +14,7 @@
 #include "Buildables/FGBuildableTradingPost.h"
 #include "Components/WidgetComponent.h"
 #include "Widgets/Text/STextBlock.h"
+#include "Widgets/SOverlay.h"
 #include "Styling/CoreStyle.h"
 #include "ChatText.h"
 
@@ -32,6 +33,7 @@ void UChatControlSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	Settings = FChatControlSettings::LoadOrCreate();
 	ChatText::SetLanguage(Settings.Language);
 	Economy.Load();
+	LoadDeveloperNames();
 	Effects = ChatEffects::CreateAll();
 
 	// The in-game settings page overrides the basic options from Settings.json
@@ -332,6 +334,7 @@ void UChatControlSubsystem::HandleEvent(const FChatEvent& Event)
 	const double Now = FPlatformTime::Seconds();
 	const FString Key = Event.GetEconomyKey();
 	const FText Name = FText::FromString(Event.DisplayName);
+	NoteDeveloper(Key, Event.DisplayName, Event.bIsBroadcaster);
 	if (Event.Type != EChatEventType::Raid && Event.Type != EChatEventType::Follow)
 	{
 		ViewerRoles.Add(Event.DisplayName.ToLower(), Event.bIsBroadcaster ? 4 : Event.bIsModerator ? 3 : Event.bIsVip ? 2 : Event.bIsSubscriber ? 1 : 0);
@@ -910,6 +913,48 @@ bool UChatControlSubsystem::IsInSafeZone() const
 		FVector::Dist2D(Player->GetActorLocation(), Hub) < Settings.SafeZoneRadius * 100.f;
 }
 
+namespace
+{
+	/** Glitch offset for one color channel: a light shiver most of the time, short strong bursts now and then */
+	TAttribute<TOptional<FSlateRenderTransform>> GlitchShift(float Seed)
+	{
+		return TAttribute<TOptional<FSlateRenderTransform>>::CreateLambda([Seed]() -> TOptional<FSlateRenderTransform>
+		{
+			const double Time = FPlatformTime::Seconds();
+			const bool bBurst = FMath::Frac(Time * 0.6 + Seed) < 0.1;
+			const float Strength = bBurst ? 9.f : 2.f;
+			return FSlateRenderTransform(FVector2D(FMath::Sin(Time * 41.0 + Seed * 17.0) * Strength, bBurst ? FMath::Sin(Time * 57.0 + Seed) * 4.f : 0.f));
+		});
+	}
+
+	/** The developer's name tag: rainbow text with a red/cyan glitch split behind it */
+	TSharedRef<SWidget> MakeDeveloperText(const FText& Text, const FSlateFontInfo& Font)
+	{
+		FSlateFontInfo Split = Font;
+		Split.OutlineSettings.OutlineSize = 0;
+		return SNew(SOverlay)
+			+ SOverlay::Slot().HAlign(HAlign_Center)
+			[
+				SNew(STextBlock).Text(Text).Font(Split).Justification(ETextJustify::Center)
+					.ColorAndOpacity(FLinearColor(1.f, 0.1f, 0.3f, 0.8f)).RenderTransform(GlitchShift(0.13f))
+			]
+			+ SOverlay::Slot().HAlign(HAlign_Center)
+			[
+				SNew(STextBlock).Text(Text).Font(Split).Justification(ETextJustify::Center)
+					.ColorAndOpacity(FLinearColor(0.1f, 0.9f, 1.f, 0.8f)).RenderTransform(GlitchShift(0.61f))
+			]
+			+ SOverlay::Slot().HAlign(HAlign_Center)
+			[
+				SNew(STextBlock).Text(Text).Font(Font).Justification(ETextJustify::Center)
+					.ColorAndOpacity_Lambda([]()
+					{
+						const float Hue = FMath::Fmod(FPlatformTime::Seconds() * 90.0, 360.0);
+						return FSlateColor(FLinearColor(Hue, 0.75f, 1.f).HSVToLinearRGB());
+					})
+			];
+	}
+}
+
 UWidgetComponent* UChatControlSubsystem::AttachNameTag(AActor* Target, const FString& Text, const FColor& Color, float Height)
 {
 	if (!Target || !Target->GetRootComponent())
@@ -930,11 +975,17 @@ UWidgetComponent* UChatControlSubsystem::AttachNameTag(AActor* Target, const FSt
 	Tag->SetBlendMode(EWidgetBlendMode::Transparent);
 	Tag->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Tag->SetCastShadow(false);
-	Tag->SetSlateWidget(SNew(STextBlock)
-		.Text(FText::FromString(Text.Replace(TEXT("<br>"), LINE_TERMINATOR)))
-		.Font(Font)
-		.ColorAndOpacity(FLinearColor(Color))
-		.Justification(ETextJustify::Center));
+	const FText Shown = FText::FromString(Text.Replace(TEXT("<br>"), LINE_TERMINATOR));
+	FString FirstLine = Text;
+	Text.Split(TEXT("<br>"), &FirstLine, nullptr);
+	if (IsDeveloper(FirstLine))
+	{
+		Tag->SetSlateWidget(MakeDeveloperText(Shown, Font));
+	}
+	else
+	{
+		Tag->SetSlateWidget(SNew(STextBlock).Text(Shown).Font(Font).ColorAndOpacity(FLinearColor(Color)).Justification(ETextJustify::Center));
+	}
 	Tag->RegisterComponent();
 	NameTags.Add(Tag);
 	return Tag;

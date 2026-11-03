@@ -430,6 +430,10 @@ void UChatControlModConfig::Register(UConfigManager* ConfigManager, const FChatC
 	AddFloat(Viewers, TEXT("PetTamedChance"), Defaults.PetTamedChance,
 		Tr(TEXT("Chance a pet comes tamed (0-1)"), TEXT("Шанс, что питомец уже приручен (0-1)")),
 		Tr(TEXT("0.5 = every second pet follows you right away"), TEXT("0.5 = каждый второй питомец сразу ходит за тобой")));
+	AddBool(Viewers, TEXT("ShowDeveloper"), Defaults.bShowDeveloper,
+		Tr(TEXT("Highlight the mod developer"), TEXT("Отмечать разработчика мода")),
+		Tr(TEXT("When the author of ChatControl chats on your stream: a \"Mod developer\" title and a rainbow name"),
+		   TEXT("Когда автор ChatControl пишет у тебя в чате: звание «Разработчик мода» и радужный ник")));
 	AddBool(Viewers, TEXT("RoleColors"), Defaults.bRoleColors,
 		Tr(TEXT("Name color by chat role"), TEXT("Цвет ника по роли в чате")),
 		Tr(TEXT("Viewers without a role keep the usual color"), TEXT("У зрителей без роли цвет обычный")));
@@ -624,6 +628,7 @@ bool UChatControlModConfig::ApplyTo(UConfigManager* ConfigManager, FChatControlS
 	bChanged |= ReadSeconds(Viewers, TEXT("PetLifeSpan"), Settings.PetLifeSpanSeconds, 1.f, 60.f);
 	bChanged |= Read<UConfigPropertyBool>(Viewers, TEXT("CreatureNameTags"), Settings.bCreatureNameTags);
 	bChanged |= Read<UConfigPropertyFloat>(Viewers, TEXT("PetTamedChance"), Settings.PetTamedChance);
+	bChanged |= Read<UConfigPropertyBool>(Viewers, TEXT("ShowDeveloper"), Settings.bShowDeveloper);
 	bChanged |= Read<UConfigPropertyBool>(Viewers, TEXT("RoleColors"), Settings.bRoleColors);
 	bChanged |= Read<UConfigPropertyString>(Viewers, TEXT("ColorBroadcaster"), Settings.ColorBroadcaster);
 	bChanged |= Read<UConfigPropertyString>(Viewers, TEXT("ColorModerator"), Settings.ColorModerator);

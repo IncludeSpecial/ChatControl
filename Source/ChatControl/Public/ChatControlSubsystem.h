@@ -76,6 +76,10 @@ public:
 	FColor GetNameColor(const FString& ViewerName, const FColor& Default) const;
 	/** Spawns (or replaces) the viewer's named pet next to the player, or at At when restoring a save */
 	bool SpawnPet(const FString& ViewerKey, const FString& ViewerName, const FVector* At = nullptr);
+	/** The mod's author, recognized by account id (a display name can be faked) */
+	bool IsDeveloper(const FString& ViewerName) const { return Settings.bShowDeveloper && DeveloperNames.Contains(ViewerName.ToLower()); }
+	/** Display names (lower case) of the mod's author seen so far, for the OBS feed */
+	const TSet<FString>& GetDeveloperNames() const { return DeveloperNames; }
 	/** Name tag text: the viewer's name plus their rank on a second line */
 	FString GetTagText(const FString& ViewerName) const;
 	/** Puts the viewer's name over the machine the player looks at (or the nearest one); kept in the save */
@@ -152,6 +156,8 @@ private:
 	void HandleGiveCommand(const FChatEvent& Event, const FString& Args);
 	/** viewer key -> when they may transfer again */
 	TMap<FString, double> TransferCooldownUntil;
+	TSet<FString> DeveloperNames;
+	bool bDeveloperGreeted = false;
 
 	FChatControlSettings Settings;
 	FChatEconomy Economy;
@@ -214,6 +220,9 @@ private:
 	// Viewers (ChatControlViewers.cpp)
 	/** Shows a greeting with the viewer's name next to the player */
 	void WelcomeViewer(const FString& ViewerName);
+	/** Remembers the mod's author when they chat, and greets them once on other streams */
+	void NoteDeveloper(const FString& ViewerKey, const FString& DisplayName, bool bIsBroadcaster);
+	void LoadDeveloperNames();
 	/** Rank for lifetime chips spent; empty when ranks are off */
 	FString GetRank(int32 ChipsSpent) const;
 	/** Announces a new rank if spending moved the viewer up */

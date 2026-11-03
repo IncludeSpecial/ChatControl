@@ -18,6 +18,9 @@ using ChatText::Tr;
 
 namespace
 {
+	/** Accounts of the mod's author (Switty): Twitch user id, which chat cannot fake */
+	const TCHAR* const DeveloperKeys[] = { TEXT("twitch:218552891") };
+
 	const FColor PetColor(120, 255, 120);
 	const FColor BuildingColor(255, 210, 90);
 	const FColor WelcomeColor(255, 255, 255);
@@ -168,8 +171,44 @@ void UChatControlSubsystem::CheckRankUp(const FString& ViewerKey, int32 SpentBef
 	}
 }
 
+void UChatControlSubsystem::NoteDeveloper(const FString& ViewerKey, const FString& DisplayName, bool bIsBroadcaster)
+{
+	bool bDeveloper = false;
+	for (const TCHAR* Key : DeveloperKeys)
+	{
+		bDeveloper |= ViewerKey == Key;
+	}
+	if (!bDeveloper || DisplayName.IsEmpty())
+	{
+		return;
+	}
+	DeveloperNames.Add(DisplayName.ToLower());
+	// Once per session, and not on the author's own stream
+	if (Settings.bShowDeveloper && !bIsBroadcaster && !bDeveloperGreeted)
+	{
+		bDeveloperGreeted = true;
+		Announce(FText::Format(Tr(TEXT("The developer of ChatControl, {0}, dropped by the stream!"), TEXT("Разработчик мода ChatControl, {0}, заглянул на стрим!")), FText::FromString(DisplayName)));
+	}
+}
+
+void UChatControlSubsystem::LoadDeveloperNames()
+{
+	// Name tags restored from a save (pets, signed machines) are made before the author chats this session
+	for (const TCHAR* Key : DeveloperKeys)
+	{
+		if (const FChatViewerRecord* Record = Economy.Find(Key); Record && !Record->DisplayName.IsEmpty())
+		{
+			DeveloperNames.Add(Record->DisplayName.ToLower());
+		}
+	}
+}
+
 FString UChatControlSubsystem::GetTagText(const FString& ViewerName) const
 {
+	if (IsDeveloper(ViewerName))
+	{
+		return ViewerName + TEXT("<br>") + Tr(TEXT("Mod developer"), TEXT("Разработчик мода")).ToString();
+	}
 	const FChatViewerRecord* Record = Economy.FindByName(ViewerName);
 	const FString Rank = Record ? GetRank(Record->ChipsSpent) : FString();
 	return Rank.IsEmpty() ? ViewerName : ViewerName + TEXT("<br>") + Rank;

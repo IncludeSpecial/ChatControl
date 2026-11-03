@@ -13,6 +13,7 @@
   - Victory drops a loot crate and pays every active viewer; if the titan wins, the summoner gets chips.
   - Default goal of the shared pot for new installs; raids with 60+ viewers bring a titan. `!test titan <boss>` picks a boss.
 - **Chip transfers**: `!give <nick> <amount>` / `!передать`, with limits per transfer and per day, a cooldown and a fee to the shared pot. All configurable.
+- **Mod developer highlight**: the author of ChatControl gets a "Mod developer" title, a rainbow glitch name tag and highlighted feed events on any stream (recognized by Twitch account id; can be turned off).
 - **OBS port** applies at once, without restarting the game.
 
 ### Fixed

@@ -119,6 +119,8 @@ struct FChatControlSettings
 	UPROPERTY() FString Ranks;
 	/** Name tag colors by chat role (hex); viewers without a role keep the color of the thing they sent */
 	UPROPERTY() bool bRoleColors = true;
+	/** The mod's author gets a "Mod developer" title and a rainbow name tag */
+	UPROPERTY() bool bShowDeveloper = true;
 	UPROPERTY() FString ColorBroadcaster = TEXT("#FF2A4A");
 	UPROPERTY() FString ColorModerator = TEXT("#19E3FF");
 	UPROPERTY() FString ColorVip = TEXT("#FF6AD5");
