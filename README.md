@@ -32,11 +32,11 @@ Twitch needs no token or login. YouTube is optional and needs a free API key.
 - **33 effects**: free ones, gifts and help, player chaos, survival, factory sabotage and creatures. See [the full list](docs/en/commands.md).
 - **Viewers in the world**: name tags with ranks and role colors, greetings with fireworks, signs, named machines and vehicles,
   pets for subscribers that stay in your save.
-- **Chat games**: votes, a shared chip pot for a big effect, top viewers, ranks, giving chips to each other (`!give`, with limits).
-- **Titans**: boss fights with 13 bosses, random traits, three stages, a health bar and loot.
+- **Chat games**: votes, shared chip pots for a boss and a titan, top viewers, ranks, giving chips to each other (`!give`, with limits).
+- **Titans**: boss fights with 13 bosses, random traits, three stages, a health bar and loot. You can't sit them out in the air or on a tower.
 - **Raids** bring ambushes, big raids a boss or a titan.
 - **Safety**: chaos budget, cooldowns, death protection, a safe zone around the HUB, `!pause`, `!panic`, `!clear`.
-- **OBS widgets** built in: event feed, vote, pot and top viewers, titan fight.
+- **OBS widgets** built in: event feed, vote, pots and top viewers, viewers' chips, titan fight.
 - **Everything is configurable** in the game, in English and Russian.
 
 ## Good to know

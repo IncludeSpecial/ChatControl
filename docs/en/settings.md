@@ -54,11 +54,12 @@ Grouped by kind. Every effect has its own block:
 
 ## Chat games
 - **Votes** (on), **Vote every (min)** (10), **Vote lasts (s)** (60), **Chips for voting** (5).
-- **Shared pot** (on), **Pot effect** (`titan` on new installs, `boss` before 0.1.3), **Pot size** (1000) - viewers fill it with `!pot N`; when full, the effect runs.
+- **Shared pot** (on), **Pot effect** (`boss`), **Pot size** (1000) - viewers fill it with `!pot N`; when full, the effect runs.
+- **Second pot effect** (`titan`), **Second pot size** (3000) - filled with `!pot titan N`. Empty, 0 chips or the same effect as the first = no second pot.
 
 ## OBS overlay
 - **Enabled** (on), **Port** (8787, 1024-65535, applies at once; an invalid port is reset to 8787, a busy one falls back to 8787).
-- **Widget folder** (empty) - a folder with your own widgets. The built-in `feed.html`, `vote.html`, `pot.html` work either way.
+- **Widget folder** (empty) - a folder with your own widgets. The built-in widgets work either way.
 
 ## Viewers in the world
 - **Greet new chatters in the world** (on), **Greeting stays for (s)** (8), **Fireworks with the greeting** (on).
@@ -76,6 +77,9 @@ Grouped by kind. Every effect has its own block:
 - **1 ambush per N raiders** (5), **Max ambushes** (5), **Boss from N raiders** (30, 0 = never), **Titan from N raiders** (60, 0 = never).
 - **Titan defeated: chips per active viewer** (50), **Titan won: chips for the summoner** (200).
 - **Peaceful loot titans** (on) - giant giraffes, beetles and striders that drop loot.
+- **Titans jam flight** (on), **Seconds in the air before jamming** (3) - staying in the air during a fight burns jetpack fuel, shuts down the hover pack and hurts.
+- **Titans reach you up high** (on), **Seconds up high before it comes** (6) - a player who stays on a tower or a ledge above the titan gets a visit.
+- **Titans push you out from under them** (on) - otherwise the camera can end up inside the titan's model.
 - The titan's own block in **Effects** sets its price, **Strength** (health multiplier, 1 = normal), **Count** (max traits),
   **Duration** (time limit of the fight) and the warning delay.
 

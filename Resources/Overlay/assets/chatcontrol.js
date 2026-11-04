@@ -3,12 +3,12 @@
 
 const CC_TEXT = {
   en: {
-    vote: "CHAT VOTE", seconds: "s", pot: "CHAT POT", potFor: "for",
-    hint: "!pot <chips> to chip in · !chips balance · !effects what you can do",
+    vote: "CHAT VOTE", seconds: "s", pot: "CHAT POT", potFor: "for", chipsArg: "<chips>", balance: "VIEWERS' CHIPS",
+    hint: "!chips balance · !daily bonus · !effects what you can do",
   },
   ru: {
-    vote: "ГОЛОСОВАНИЕ ЧАТА", seconds: "с", pot: "КОПИЛКА ЧАТА", potFor: "на",
-    hint: "!pot <чипы> скинуться · !chips баланс · !effects что можно",
+    vote: "ГОЛОСОВАНИЕ ЧАТА", seconds: "с", pot: "КОПИЛКА ЧАТА", potFor: "на", chipsArg: "<чипы>", balance: "ЧИПЫ ЗРИТЕЛЕЙ",
+    hint: "!chips баланс · !daily бонус · !effects что можно",
   },
 };
 

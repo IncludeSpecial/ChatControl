@@ -127,6 +127,14 @@ private:
 	/** Votes, pot, top and stats commands. Returns true if the command was handled. */
 	bool HandleGameCommand(const FChatEvent& Event, const FString& Command, const FString& Args);
 	void HandlePotCommand(const FChatEvent& Event, const FString& Args);
+	/** A shared pot that can run right now: its index in the economy, effect and size */
+	struct FPotGoal
+	{
+		int32 Index;
+		FString Effect;
+		int32 Chips;
+	};
+	TArray<FPotGoal> GetPotGoals() const;
 	void TickVotes(double Now);
 	void FinishVote(double Now);
 	void RecordSessionEffect(const FString& ViewerName);
@@ -247,6 +255,7 @@ private:
 		FString ViewerName;
 		TWeakObjectPtr<APawn> Boss;
 		TWeakObjectPtr<class UFGHealthComponent> Health;
+		TWeakObjectPtr<class UWidgetComponent> Bar;
 		float MaxHealth = 1.f;
 		float LastHealth = 0.f;
 		float PlayerLastHealth = 0.f;
@@ -266,11 +275,40 @@ private:
 		bool bLeaping = false;
 		/** Jetpack flight: TickBoss moves the boss itself, so the AI and attacks can't stop it */
 		bool bJetFlying = false;
+		bool bJetDiving = false;
+		/** The dive goes for a player in the air, not the ground */
+		bool bJetIntercept = false;
+		bool bJetRammed = false;
+		bool bLeapAnnounced = false;
+		/** When the player got out of the boss's reach, high above it; 0 = within reach */
+		double PlayerOutOfReachSince = 0.0;
+		bool bBossStuck = false;
+		double NextStuckCheckTime = 0.0;
+		/** Distance to the player at the last check; 0 = no check yet */
+		float LastStuckGap = 0.f;
+		/** Told the log why it isn't flying; said once until it can fly again */
+		bool bJetGrounded = false;
+		bool bPlayerInAir = false;
+		/** When the player's powered flight began; 0 = not flying */
+		double PlayerFlyingSince = 0.0;
+		double PlayerGroundedSince = 0.0;
+		double LastThrustTime = 0.0;
+		double NextJamTime = 0.0;
+		bool bJamAnnounced = false;
 		double NextJetTime = 0.0;
+		/** A player who ran far away gets chased sooner than NextJetTime */
+		double NextJetChaseTime = 0.0;
 		double JetStartTime = 0.0;
-		double JetDuration = 1.0;
+		double JetClimbTime = 1.0;
+		double JetDiveStartTime = 0.0;
 		FVector JetFrom = FVector::ZeroVector;
 		FVector JetTo = FVector::ZeroVector;
+		FVector JetFlameScale = FVector::OneVector;
+		double NextShoveTime = 0.0;
+		double NextBodyHitTime = 0.0;
+		/** When the player last lost health in this fight */
+		double LastPlayerHitTime = 0.0;
+		float BodyHalfLength = 0.f;
 		TArray<TWeakObjectPtr<class UStaticMeshComponent>> JetFlames;
 		TArray<TWeakObjectPtr<APawn>> Minions;
 	};

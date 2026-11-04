@@ -3,13 +3,23 @@
 ## 0.1.4
 
 ### New
+- **Two shared pots**: one for a boss and one for a titan, each with its own size. `!pot 100` fills the first, `!pot titan 100` the second, `!pot` shows both. Both are on the `pot.html` widget (now 640 x 450) and can be changed in **Chat games**.
+- **New OBS widget `balance.html`**: the chips of the viewers in chat, with the last change next to each number, so nobody has to type `!chips`.
 - `!test titan <boss> <traits>` picks the traits too, e.g. `!test titan queen radioactive`.
 - `!test as <nick> <message>` writes as a plain viewer, to try `!give` and the like without a second account.
 
 ### Changed
-- Titans with a Jetpack really fly: they wear the game's jetpack with flames, rise about 15 m and land next to the player with a shockwave, from any distance and on peaceful titans too.
+- Titans with a Jetpack really fly, peaceful ones too: they wear the game's jetpack, shake on the ground as the engines fire up, climb 18 m, hang over the player, then dive at the spot where the player stood. The landing makes a shockwave and stuns the titan for 2 seconds. Moving away during the dive dodges the hit, and a player who runs far away gets chased sooner.
+- You can't wait out a titan in the air: after 3 seconds of powered flight your jetpack loses half its fuel and you take damage every 2 seconds, and the hover pack shuts down. Falling, parachutes and jump pads don't count. Titans with a Jetpack ram a flying player and throw them down. Can be turned off under **Raids and titans**.
+- Titans with a Jetpack stay on foot while you are under a roof, in a cave or in the safe zone.
+- You can't shoot a titan from safety: if you stay at least 5 m above or below it for 6 seconds, it gets stuck and can't reach you, or it hasn't hurt you for 12 seconds, it flies over to you, jetpack or not. Can be turned off under **Raids and titans**.
+- Titans push you out from under them, so the camera doesn't end up inside the model, and the shove hurts. Can be turned off under **Raids and titans**.
 
 ### Fixed
+- The health bar of a defeated titan no longer stays in the air, and a titan killed in flight drops its loot on the ground.
+- A titan's minions appear around the titan when there is no room around the player, instead of not at all.
+- Shockwaves no longer reach a player far above or below them, and don't throw a player out of a vehicle, off a zipline or out of a hypertube.
+- Loot titans don't stomp from the air.
 - Viewers could choose the boss by typing `!titan giraffe`, even with peaceful titans turned off. Now only `!test` can.
 - Russian titan messages no longer use "он" for female bosses or forms like "победил(а)".
 

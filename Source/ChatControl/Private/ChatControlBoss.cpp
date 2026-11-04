@@ -5,6 +5,8 @@
 #include "ChatEffects.h"
 #include "FGCharacterPlayer.h"
 #include "FGHealthComponent.h"
+#include "Equipment/FGJetPack.h"
+#include "Equipment/FGHoverPack.h"
 #include "Creature/FGCreature.h"
 #include "Creature/Enemy/FGCrabHatcher.h"
 #include "AI/FGCreatureController.h"
@@ -15,7 +17,7 @@
 #include "Components/WidgetComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
-#include "Materials/MaterialInterface.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SBorder.h"
@@ -108,8 +110,15 @@ namespace
 
 	const TCHAR* const TitanKey = TEXT("system:titan");
 
-	/** A game mesh strapped on the boss, Size centimeters along its longest side; no collision */
-	UStaticMeshComponent* AddJetpackPart(APawn* Pawn, const TCHAR* MeshPath, const FVector& Location, const FRotator& Rotation, float Size)
+	/** The jetpack's fuel is protected; never instantiated */
+	struct FJetPackAccess : AFGJetPack
+	{
+		static float GetFuel(const AFGJetPack* Pack) { return Pack->*(&FJetPackAccess::mCurrentFuel); }
+		static void SetFuel(AFGJetPack* Pack, float Fuel) { (Pack->*(&FJetPackAccess::SetCurrentFuel))(Fuel); }
+	};
+
+	/** A game mesh strapped on a bone of the boss, Size centimeters along its longest side; no collision */
+	UStaticMeshComponent* AddJetpackPart(USkeletalMeshComponent* Body, FName Bone, const TCHAR* MeshPath, const FVector& Location, const FQuat& Rotation, float Size)
 	{
 		UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr, MeshPath);
 		if (!Mesh)
@@ -117,14 +126,14 @@ namespace
 			UE_LOG(LogChatControl, Warning, TEXT("Titan jetpack: mesh not found: %s"), MeshPath);
 			return nullptr;
 		}
-		UStaticMeshComponent* Part = NewObject<UStaticMeshComponent>(Pawn);
+		UStaticMeshComponent* Part = NewObject<UStaticMeshComponent>(Body->GetOwner());
 		Part->SetStaticMesh(Mesh);
 		Part->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		Part->SetCastShadow(false);
-		Part->SetupAttachment(Pawn->GetRootComponent());
-		Part->SetRelativeLocationAndRotation(Location, Rotation);
-		Part->SetRelativeScale3D(FVector(Size / FMath::Max(1.0, 2.0 * Mesh->GetBounds().BoxExtent.GetMax())));
+		Part->SetupAttachment(Body, Bone);
 		Part->RegisterComponent();
+		Part->SetWorldLocationAndRotation(Location, Rotation);
+		Part->SetWorldScale3D(FVector(Size / FMath::Max(1.0, 2.0 * Mesh->GetBounds().BoxExtent.GetMax())));
 		return Part;
 	}
 
@@ -146,18 +155,38 @@ namespace
 		return false;
 	}
 
+	/** On foot or falling: not in a vehicle, on a zipline or in a hypertube, where throwing would break things */
+	bool CanThrowPlayer(const AFGCharacterPlayer* Player)
+	{
+		const UCharacterMovementComponent* Movement = Player->GetCharacterMovement();
+		return !Player->IsDrivingVehicle() && Movement && (Movement->IsMovingOnGround() || Movement->IsFalling());
+	}
+
+	/** The first solid thing under Location; Location itself over a void */
+	FVector GroundBelow(UWorld* World, const FVector& Location, const AActor* IgnoreBoss, const AActor* IgnorePlayer)
+	{
+		FHitResult Ground;
+		FCollisionQueryParams Query(NAME_None, false, IgnoreBoss);
+		Query.AddIgnoredActor(IgnorePlayer);
+		return World && World->LineTraceSingleByChannel(Ground, Location + FVector(0.f, 0.f, 300.f), Location - FVector(0.f, 0.f, 100000.f), ECC_WorldStatic, Query)
+			? Ground.ImpactPoint : Location;
+	}
+
 	/** Damage that fades with distance from Center and throws the player away from it */
 	void Shockwave(AFGCharacterPlayer* Player, const FVector& Center, float Radius, float Damage, float Push, AActor* Causer)
 	{
 		const float Distance = FVector::Dist2D(Player->GetActorLocation(), Center);
-		if (Distance > Radius || !Player->GetHealthComponent())
+		if (Distance > Radius || FMath::Abs(Player->GetActorLocation().Z - Center.Z) > Radius || !Player->GetHealthComponent())
 		{
 			return;
 		}
 		const float Falloff = 1.f - 0.6f * Distance / Radius;
 		Player->GetHealthComponent()->TakeDamage(Player, Damage * Falloff, GetDefault<UDamageType>(), nullptr, Causer);
-		const FVector Away = (Player->GetActorLocation() - Center).GetSafeNormal2D();
-		Player->LaunchCharacter(Away * Push * Falloff + FVector(0, 0, Push * 0.5f), true, true);
+		if (CanThrowPlayer(Player))
+		{
+			const FVector Away = (Player->GetActorLocation() - Center).GetSafeNormal2D();
+			Player->LaunchCharacter(Away * Push * Falloff + FVector(0, 0, Push * 0.5f), true, true);
+		}
 	}
 
 	/** Full aggro on the player, so a freshly spawned creature attacks instead of standing around */
@@ -344,9 +373,16 @@ void UChatControlSubsystem::SpawnTitan()
 	BossFight.PlayerLastHealth = Player->GetHealthComponent() ? Player->GetHealthComponent()->GetCurrentHealth() : 0.f;
 	BossFight.BaseDilation = (BossFight.Traits & Swift) ? 1.15f : 1.f;
 	BossFight.LastDamageTime = Now;
+	BossFight.LastPlayerHitTime = Now;
 	BossFight.NextSummonTime = Now + (Boss.Kind == EBossKind::Hatcher ? 20.0 : 30.0);
 	BossFight.NextRegenTime = Now + 1.0;
 	Pawn->CustomTimeDilation = BossFight.BaseDilation;
+	if (const ACharacter* BodyOwner = Cast<ACharacter>(Pawn); BodyOwner && BodyOwner->GetMesh())
+	{
+		const FVector BodyExtent = BodyOwner->GetMesh()->CalcBounds(FTransform::Identity).BoxExtent;
+		BossFight.BodyHalfLength = FMath::Max(BodyExtent.X, BodyExtent.Y) * Scale;
+		UE_LOG(LogChatControl, Log, TEXT("Titan: body half length %.0f cm"), BossFight.BodyHalfLength);
+	}
 	ProvokeCreature(Pawn, Player);
 	AttachBossBar(Pawn);
 
@@ -371,26 +407,71 @@ void UChatControlSubsystem::SpawnTitan()
 	{
 		Announce(Tr(TEXT("It wears a jetpack - watch the sky!"), TEXT("У титана реактивный ранец - следи за небом!")));
 		BossFight.NextJetTime = Now + 5.0;
-		const ACharacter* Character = Cast<ACharacter>(Pawn);
-		if (const UCapsuleComponent* Capsule = Character ? Character->GetCapsuleComponent() : nullptr)
+		ACharacter* Character = Cast<ACharacter>(Pawn);
+		USkeletalMeshComponent* Body = Character ? Character->GetMesh() : nullptr;
+		if (Body && Character->GetCapsuleComponent())
 		{
-			float BodyRadius = 100.f, BodyHalfHeight = 100.f;
-			Capsule->GetUnscaledCapsuleSize(BodyRadius, BodyHalfHeight);
-			AddJetpackPart(Pawn, TEXT("/Game/FactoryGame/Equipment/JetPack/Mesh/Jetpack_Groundmesh.Jetpack_Groundmesh"),
-				FVector(-BodyRadius * 0.3f, 0.f, BodyHalfHeight + 20.f), FRotator::ZeroRotator, FMath::Max(120.f, BodyRadius * 1.4f));
-			UMaterialInterface* FlameMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/FactoryGame/VFX/Vehicles/Drone/MI/MI_Thruster_Drone_01.MI_Thruster_Drone_01"));
-			for (const float Side : { -1.f, 1.f })
+			// On the highest bone of the back half: it moves with the body and stays on the corpse
+			const float BodyRadius = Character->GetCapsuleComponent()->GetScaledCapsuleRadius();
+			const FTransform ActorTransform = Pawn->GetActorTransform();
+			FName BackBone = NAME_None;
+			FVector BackLocation = Pawn->GetActorLocation() + FVector(0.f, 0.f, Character->GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
+			double BestHeight = -UE_BIG_NUMBER;
+			TArray<FName> Bones;
+			Body->GetBoneNames(Bones);
+			for (const FName& Bone : Bones)
 			{
-				UStaticMeshComponent* Flame = AddJetpackPart(Pawn, TEXT("/Game/FactoryGame/VFX/Mesh/SM_VFX_Thruster_01.SM_VFX_Thruster_01"),
-					FVector(-BodyRadius * 0.3f, Side * BodyRadius * 0.4f, BodyHalfHeight - 40.f), FRotator::ZeroRotator, FMath::Max(150.f, BodyRadius * 1.5f));
-				if (Flame)
+				// A limb can be the highest bone, and the jetpack would wave around with it
+				const FString BoneName = Bone.ToString();
+				bool bLimb = false;
+				for (const TCHAR* Limb : { TEXT("pincer"), TEXT("claw"), TEXT("leg"), TEXT("arm"), TEXT("foot"), TEXT("hand"), TEXT("toe"), TEXT("finger"), TEXT("tail"), TEXT("jaw"), TEXT("mandible"), TEXT("wing"), TEXT("antenna"), TEXT("horn"), TEXT("tusk"), TEXT("stinger"), TEXT("neck") })
 				{
-					Flame->SetMaterial(0, FlameMaterial);
-					Flame->SetVisibility(false);
-					BossFight.JetFlames.Add(Flame);
+					bLimb |= BoneName.Contains(Limb);
+				}
+				if (bLimb)
+				{
+					continue;
+				}
+				const FVector BoneLocation = Body->GetBoneLocation(Bone);
+				const FVector Local = ActorTransform.InverseTransformPositionNoScale(BoneLocation);
+				if (Local.X < BodyRadius * 0.2f && Local.X > -BodyRadius * 1.2f && FMath::Abs(Local.Y) < BodyRadius * 0.5f && Local.Z > BestHeight)
+				{
+					BestHeight = Local.Z;
+					BackBone = Bone;
+					BackLocation = BoneLocation;
 				}
 			}
-			UE_LOG(LogChatControl, Log, TEXT("Titan jetpack: %d flames, flame material %s"), BossFight.JetFlames.Num(), FlameMaterial ? TEXT("found") : TEXT("not found"));
+			const FQuat ActorRotation = Pawn->GetActorQuat();
+			const FVector PackLocation = BackLocation + FVector(0.f, 0.f, 30.f);
+			AddJetpackPart(Body, BackBone, TEXT("/Game/FactoryGame/Equipment/JetPack/Mesh/Jetpack_Groundmesh.Jetpack_Groundmesh"),
+				PackLocation, ActorRotation, FMath::Max(130.f, BodyRadius));
+			// Blows down and back, past the body instead of through it
+			const FVector Exhaust = (Pawn->GetActorForwardVector() * -0.5f - FVector::UpVector * 0.87f).GetSafeNormal();
+			FString FlameShape;
+			for (const float Side : { -1.f, 1.f })
+			{
+				// The jetpack's own flame mesh, with its own material
+				UStaticMeshComponent* Flame = AddJetpackPart(Body, BackBone, TEXT("/Game/FactoryGame/VFX/Mesh/SM_Cylinder_Taper_01.SM_Cylinder_Taper_01"),
+					PackLocation + Pawn->GetActorRightVector() * Side * BodyRadius * 0.3f - Pawn->GetActorForwardVector() * BodyRadius * 0.3f, ActorRotation, FMath::Max(250.f, BodyRadius * 1.6f));
+				if (Flame)
+				{
+					// Aim the mesh's longest side, in the direction it grows from its pivot
+					const FBoxSphereBounds MeshBounds = Flame->GetStaticMesh()->GetBounds();
+					const int32 Axis = MeshBounds.BoxExtent.X >= MeshBounds.BoxExtent.Y && MeshBounds.BoxExtent.X >= MeshBounds.BoxExtent.Z ? 0 : MeshBounds.BoxExtent.Y >= MeshBounds.BoxExtent.Z ? 1 : 2;
+					FVector Along = FVector::ZeroVector;
+					Along[Axis] = MeshBounds.Origin[Axis] >= 0.0 ? 1.0 : -1.0;
+					Flame->SetWorldRotation(FQuat::FindBetweenNormals(Along, Exhaust));
+					// The mesh is about as wide as it is long: a flame is long and narrow
+					FVector FlameScale = Flame->GetComponentScale() * 0.3;
+					FlameScale[Axis] /= 0.3;
+					Flame->SetWorldScale3D(FlameScale);
+					Flame->SetVisibility(false);
+					BossFight.JetFlameScale = Flame->GetRelativeScale3D();
+					BossFight.JetFlames.Add(Flame);
+					FlameShape = MeshBounds.ToString();
+				}
+			}
+			UE_LOG(LogChatControl, Log, TEXT("Titan jetpack: on bone %s, %d flames, flame mesh %s"), *BackBone.ToString(), BossFight.JetFlames.Num(), *FlameShape);
 		}
 	}
 	if (BossFight.Traits & Nocturnal)
@@ -408,7 +489,7 @@ void UChatControlSubsystem::AttachBossBar(APawn* Boss)
 	FVector Origin, Extent;
 	Boss->GetActorBounds(true, Origin, Extent);
 	const float Scale = FMath::Max(0.1f, Boss->GetActorScale3D().Z);
-	const float WorldHeight = Origin.Z + Extent.Z - Boss->GetActorLocation().Z + 140.f;
+	const float WorldHeight = Origin.Z + Extent.Z - Boss->GetActorLocation().Z + ((BossFight.Traits & Jetpack) ? 240.f : 140.f);
 
 	FSlateFontInfo TitleFont = FCoreStyle::GetDefaultFontStyle(TEXT("Bold"), 34);
 	TitleFont.OutlineSettings.OutlineSize = 3;
@@ -470,6 +551,7 @@ void UChatControlSubsystem::AttachBossBar(APawn* Boss)
 		]);
 	Bar->RegisterComponent();
 	NameTags.Add(Bar);
+	BossFight.Bar = Bar;
 }
 
 void UChatControlSubsystem::TickBoss(double Now)
@@ -496,7 +578,8 @@ void UChatControlSubsystem::TickBoss(double Now)
 		const FVector LootLocation = Boss ? Boss->GetActorLocation() : Player ? Player->GetActorLocation() + Player->GetActorForwardVector() * 300.f : FVector::ZeroVector;
 		Announce(FText::Format(Tr(TEXT("VICTORY! {0} is defeated!"), TEXT("ПОБЕДА! Титан повержен: {0}!")), FText::FromString(BossFight.Title)));
 		const int32 Loot = Type.Kind == EBossKind::Peaceful ? 10 : 6;
-		if (Player && ChatEffects::DropLootCrate(GetGameWorld(), Player, LootLocation + FVector(0, 0, 100.f), Loot, 0.6f))
+		// Killed in the air, the boss's location is still up there
+		if (Player && ChatEffects::DropLootCrate(GetGameWorld(), Player, GroundBelow(GetGameWorld(), LootLocation, Boss, Player) + FVector(0, 0, 100.f), Loot, 0.6f))
 		{
 			Announce(Tr(TEXT("It dropped a crate full of loot!"), TEXT("Из титана выпал ящик с лутом!")));
 		}
@@ -574,6 +657,10 @@ void UChatControlSubsystem::TickBoss(double Now)
 	if (UFGHealthComponent* PlayerHealth = Player ? Player->GetHealthComponent() : nullptr)
 	{
 		const float PlayerHealthNow = PlayerHealth->GetCurrentHealth();
+		if (PlayerHealthNow < BossFight.PlayerLastHealth)
+		{
+			BossFight.LastPlayerHitTime = Now;
+		}
 		if ((BossFight.Traits & Bloodthirsty) && PlayerHealthNow < BossFight.PlayerLastHealth)
 		{
 			// Every hit on the streamer heals the boss
@@ -611,7 +698,7 @@ void UChatControlSubsystem::TickBoss(double Now)
 		const float Distance = FVector::Dist2D(Player->GetActorLocation(), Boss->GetActorLocation());
 
 		// Stomp: hurts and throws the player back when they stand too close
-		if (Now >= BossFight.NextStompTime)
+		if (!BossFight.bJetFlying && Now >= BossFight.NextStompTime)
 		{
 			BossFight.NextStompTime = Now + (BossFight.Stage >= 3 ? 1.2 : 2.0);
 			Shockwave(Player, Boss->GetActorLocation(), Radius + 550.f, 15.f * DamageScale, 900.f, Boss);
@@ -644,6 +731,83 @@ void UChatControlSubsystem::TickBoss(double Now)
 			Beast->LaunchCharacter(FVector(Toward.X, Toward.Y, 0.f) / AirTime + FVector(0, 0, 0.5f * Gravity * AirTime), true, true);
 		}
 	}
+	const ACharacter* BossBody = Cast<ACharacter>(Boss);
+	if (Player && Settings.bTitanPushPlayer && !BossFight.bJetFlying && Now >= BossFight.NextShoveTime && BossBody && BossBody->GetCapsuleComponent() && CanThrowPlayer(Player))
+	{
+		// The scaled body is bigger than its collision: keep the player from ending up inside it, with the camera in the model.
+		// The body is long, so the zone follows it, but stays inside the reach of its bites: mesh bounds are looser than the body
+		float Radius = 100.f, HalfHeight = 100.f;
+		BossBody->GetCapsuleComponent()->GetScaledCapsuleSize(Radius, HalfHeight);
+		const FVector Offset = Player->GetActorLocation() - Boss->GetActorLocation();
+		if (FMath::Abs(FVector::DotProduct(Offset, Boss->GetActorForwardVector())) < FMath::Max(BossFight.BodyHalfLength * 0.7f, Radius) + 60.f
+			&& FMath::Abs(FVector::DotProduct(Offset, Boss->GetActorRightVector())) < Radius + 60.f && FMath::Abs(Offset.Z) < HalfHeight + 200.f)
+		{
+			BossFight.NextShoveTime = Now + 0.3;
+			// Being shoved by an angry titan hurts: otherwise it could never land a bite on someone it keeps pushing away
+			const AFGCreature* BossCreature = Cast<AFGCreature>(Boss);
+			if (Type.Kind != EBossKind::Peaceful && !(BossCreature && BossCreature->IsStunned()) && Now >= BossFight.NextBodyHitTime && Player->GetHealthComponent())
+			{
+				BossFight.NextBodyHitTime = Now + 1.5;
+				Player->GetHealthComponent()->TakeDamage(Player, 10.f * (Settings.Difficulty >= 3 ? 1.5f : Settings.Difficulty <= 1 ? 0.6f : 1.f), GetDefault<UDamageType>(), nullptr, Boss);
+			}
+			const FVector Away = Offset.IsNearlyZero() ? Boss->GetActorForwardVector() : Offset.GetSafeNormal2D();
+			Player->LaunchCharacter(Away * 700.f + FVector(0.f, 0.f, 150.f), true, false);
+		}
+	}
+	if (Player)
+	{
+		// Most titans only hit on the ground: staying in the air burns the jetpack's fuel, shuts down the hover pack and hurts
+		AFGEquipment* BackItem = Player->GetEquipmentInSlot(EEquipmentSlot::ES_BACK);
+		AFGHoverPack* HoverPack = Cast<AFGHoverPack>(BackItem);
+		AFGJetPack* JetPack = Cast<AFGJetPack>(BackItem);
+		const bool bHovering = HoverPack && HoverPack->IsHoverActive();
+		BossFight.bPlayerInAir = !Player->IsDrivingVehicle() && (bHovering || (Player->GetCharacterMovement() && Player->GetCharacterMovement()->IsFalling()));
+		if (JetPack && JetPack->IsThrusting())
+		{
+			BossFight.LastThrustTime = Now;
+		}
+		// Only powered flight counts: not a fall, a parachute, a jump pad or being thrown by a shockwave
+		const bool bFlying = BossFight.bPlayerInAir && (bHovering || Now - BossFight.LastThrustTime < 2.0);
+		// A quick touch of the ground doesn't start the count over
+		if (BossFight.bPlayerInAir)
+		{
+			BossFight.PlayerGroundedSince = 0.0;
+		}
+		else if (BossFight.PlayerGroundedSince <= 0.0)
+		{
+			BossFight.PlayerGroundedSince = Now;
+		}
+		else if (Now - BossFight.PlayerGroundedSince >= 1.5)
+		{
+			BossFight.PlayerFlyingSince = 0.0;
+		}
+		if (bFlying && BossFight.PlayerFlyingSince <= 0.0)
+		{
+			BossFight.PlayerFlyingSince = Now;
+		}
+		if (Settings.bTitanJamFlight && bFlying && Now - BossFight.PlayerFlyingSince >= Settings.TitanFlightGraceSeconds && Now >= BossFight.NextJamTime
+			&& FVector::Dist(Player->GetActorLocation(), Boss->GetActorLocation()) < 15000.f)
+		{
+			BossFight.NextJamTime = Now + 2.0;
+			if (JetPack)
+			{
+				FJetPackAccess::SetFuel(JetPack, FJetPackAccess::GetFuel(JetPack) * 0.5f);
+			}
+			if (HoverPack)
+			{
+				HoverPack->SetHoverMode(EHoverPackMode::HPM_Inactive);
+			}
+			if (Player->GetHealthComponent())
+			{
+				Player->GetHealthComponent()->TakeDamage(Player, 5.f * (Settings.Difficulty >= 3 ? 1.5f : Settings.Difficulty <= 1 ? 0.6f : 1.f), GetDefault<UDamageType>(), nullptr, Boss);
+			}
+			if (!BossFight.bJamAnnounced)
+			{
+				BossFight.bJamAnnounced = true;
+				Announce(Tr(TEXT("The titan jams your flight: the longer you stay in the air, the worse it gets!"), TEXT("Титан глушит полёт: чем дольше ты в воздухе, тем хуже!")));
+			}
+		}
+	}
 	if ((BossFight.Traits & Radioactive) && Player && Now >= BossFight.NextRadiationTime)
 	{
 		// Radiation: the closer, the more it hurts; no push
@@ -655,9 +819,31 @@ void UChatControlSubsystem::TickBoss(double Now)
 			Player->GetHealthComponent()->TakeDamage(Player, Damage, GetDefault<UDamageType>(), nullptr, Boss);
 		}
 	}
-	if ((BossFight.Traits & Jetpack) && Player)
+	const bool bHasJetpack = (BossFight.Traits & Jetpack) != 0;
+	if ((bHasJetpack || Settings.bTitanLeapToPlayer) && Player)
 	{
-		// Jetpack: flies up and over to the player and lands next to them with a shockwave
+		// A player on a tower above the boss, or the boss left on top of one, can't reach each other on foot:
+		// after a while any titan makes the same flight, just without the jetpack
+		const FVector Gap = Player->GetActorLocation() - Boss->GetActorLocation();
+		if (Player->IsDrivingVehicle() || FMath::Abs(Gap.Z) < 500.f || Gap.Size2D() > 6000.f)
+		{
+			BossFight.PlayerOutOfReachSince = 0.0;
+		}
+		else if (BossFight.PlayerOutOfReachSince <= 0.0)
+		{
+			BossFight.PlayerOutOfReachSince = Now;
+		}
+		// So can a boss with no way through a wall or a factory: it may keep walking around, what counts is that it gets no closer.
+		// Spitters keep their distance on purpose, to shoot
+		if (Now >= BossFight.NextStuckCheckTime)
+		{
+			BossFight.NextStuckCheckTime = Now + 8.0;
+			const float GapNow = Gap.Size();
+			BossFight.bBossStuck = Type.Kind != EBossKind::Spitter && !Player->IsDrivingVehicle() && !BossFight.bJetFlying && GapNow > 1200.f
+				&& BossFight.LastStuckGap > 0.f && GapNow > BossFight.LastStuckGap - 300.f;
+			BossFight.LastStuckGap = GapNow;
+		}
+		// Jetpack: the engines fire up, it climbs, hangs over the player, dives at where they stood and needs a moment to recover
 		ACharacter* Flyer = Cast<ACharacter>(Boss);
 		UCharacterMovementComponent* Movement = Flyer ? Flyer->GetCharacterMovement() : nullptr;
 		auto ShowFlames = [this](bool bShow)
@@ -670,14 +856,53 @@ void UChatControlSubsystem::TickBoss(double Now)
 				}
 			}
 		};
-		// !dance freezes creatures with a tiny time dilation; a frozen boss stays on the ground
-		if (Movement && !BossFight.bJetFlying && Now >= BossFight.NextJetTime && Boss->CustomTimeDilation >= 0.01f)
+		const float Distance = FVector::Dist2D(Player->GetActorLocation(), Boss->GetActorLocation());
+		// Whatever keeps the player safe, a roof of a machine, a wall or good footwork: a titan that hasn't hurt them for a while comes from above
+		const bool bHarmless = Now - BossFight.LastPlayerHitTime >= Settings.TitanLeapSeconds * 2.f;
+		bool bTimeToFly = bHasJetpack
+			? Now >= BossFight.NextJetTime || (Distance > 2000.f && Now >= BossFight.NextJetChaseTime) || (BossFight.bBossStuck && Now >= BossFight.NextJetChaseTime)
+			: Now >= BossFight.NextJetTime && (bHarmless || BossFight.bBossStuck || (BossFight.PlayerOutOfReachSince > 0.0 && Now - BossFight.PlayerOutOfReachSince >= Settings.TitanLeapSeconds));
+		if (bTimeToFly && !BossFight.bJetFlying)
 		{
+			// No room to hang over a player under a roof or in a cave, and the safe zone stays safe from the sky: it comes on foot
+			FHitResult Cover;
+			FCollisionQueryParams CoverQuery(NAME_None, false, Boss);
+			CoverQuery.AddIgnoredActor(Player);
+			const FVector Head = Player->GetActorLocation() + FVector(0.f, 0.f, 100.f);
+			const bool bSafeZone = IsInSafeZone();
+			if (bSafeZone || GetGameWorld()->LineTraceSingleByChannel(Cover, Head, Head + FVector(0.f, 0.f, 1800.f), ECC_WorldStatic, CoverQuery))
+			{
+				bTimeToFly = false;
+				BossFight.NextJetTime = BossFight.NextJetChaseTime = Now + 2.0;
+				if (!BossFight.bJetGrounded)
+				{
+					BossFight.bJetGrounded = true;
+					UE_LOG(LogChatControl, Log, TEXT("Titan jetpack: stays on the ground, player is %s"), bSafeZone ? TEXT("in the safe zone") : *FString::Printf(TEXT("under %s"), Cover.GetActor() ? *Cover.GetActor()->GetName() : TEXT("something")));
+				}
+			}
+			else
+			{
+				BossFight.bJetGrounded = false;
+			}
+		}
+		// !dance freezes creatures with a tiny time dilation; a frozen boss stays on the ground
+		if (Movement && !BossFight.bJetFlying && bTimeToFly && Boss->CustomTimeDilation >= 0.01f)
+		{
+			if (!bHasJetpack && !BossFight.bLeapAnnounced)
+			{
+				BossFight.bLeapAnnounced = true;
+				Announce(Tr(TEXT("You can't hide from the titan: it is coming for you!"), TEXT("От титана не спрячешься: он идёт за тобой!")));
+			}
+			BossFight.PlayerOutOfReachSince = 0.0;
+			BossFight.bBossStuck = false;
+			// A dive that misses gives the player a new count, not a dive every few seconds
+			BossFight.LastPlayerHitTime = Now;
 			BossFight.bJetFlying = true;
+			BossFight.bJetDiving = false;
+			BossFight.bJetRammed = false;
 			BossFight.JetStartTime = Now;
 			BossFight.JetFrom = Boss->GetActorLocation();
-			const float Distance = FVector::Dist2D(Player->GetActorLocation(), BossFight.JetFrom);
-			BossFight.JetDuration = FMath::Clamp(Distance / 1500.f, 2.f, 4.5f);
+			BossFight.JetClimbTime = FMath::Clamp(Distance / 2500.f, 1.2f, 2.5f);
 			if (AAIController* Controller = Cast<AAIController>(Boss->GetController()))
 			{
 				Controller->StopMovement();
@@ -689,30 +914,125 @@ void UChatControlSubsystem::TickBoss(double Now)
 		{
 			float Radius = 100.f, HalfHeight = 100.f;
 			Flyer->GetCapsuleComponent()->GetScaledCapsuleSize(Radius, HalfHeight);
-			const float Alpha = FMath::Clamp(static_cast<float>((Now - BossFight.JetStartTime) / BossFight.JetDuration), 0.f, 1.f);
-			if (Alpha < 0.7f)
+			const double IgniteTime = 0.8, DiveTime = 0.55;
+			const double HoverTime = BossFight.Stage >= 3 ? 0.8 : 1.2;
+			const double Elapsed = Now - BossFight.JetStartTime;
+			const FVector PlayerLocation = Player->GetActorLocation();
+			const FVector Hover = PlayerLocation + (BossFight.JetFrom - PlayerLocation).GetSafeNormal2D() * 500.f + FVector(0.f, 0.f, 1800.f);
+			FVector Position = Boss->GetActorLocation();
+			float Pitch = 0.f;
+			float DiveAlpha = 0.f;
+			if (Elapsed < IgniteTime)
 			{
-				// Follows the player until it starts coming down, which leaves time to dodge
-				const FVector Away = (BossFight.JetFrom - Player->GetActorLocation()).GetSafeNormal2D();
-				BossFight.JetTo = Player->GetActorLocation() + Away * (Radius + 350.f)
-					+ FVector(0.f, 0.f, HalfHeight - Player->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() + 30.f);
+				// Shakes on the ground with the engines on: the warning
+				Position = BossFight.JetFrom + FMath::VRand() * 6.f;
 			}
-			FVector Position = FMath::Lerp(BossFight.JetFrom, BossFight.JetTo, Alpha);
-			Position.Z += 1500.f * FMath::Sin(PI * Alpha);
+			else if (Elapsed < IgniteTime + BossFight.JetClimbTime)
+			{
+				const float Climb = static_cast<float>((Elapsed - IgniteTime) / BossFight.JetClimbTime);
+				Position = FMath::Lerp(BossFight.JetFrom, Hover, 1.f - FMath::Square(1.f - Climb));
+				Pitch = 20.f;
+			}
+			else if (Elapsed < IgniteTime + BossFight.JetClimbTime + HoverTime)
+			{
+				Position = FMath::VInterpTo(Position, Hover, GetGameWorld()->GetDeltaSeconds(), 3.f);
+			}
+			else
+			{
+				if (!BossFight.bJetDiving)
+				{
+					// The target is locked here: moving away now dodges the hit
+					BossFight.bJetDiving = true;
+					BossFight.JetDiveStartTime = Now;
+					BossFight.JetFrom = Position;
+					const FVector Approach = (Position - PlayerLocation).GetSafeNormal2D();
+					// A player high in the air gets rammed up there, where they will be by then; flying straight doesn't dodge it
+					BossFight.bJetIntercept = Settings.bTitanJamFlight && BossFight.bPlayerInAir
+						&& PlayerLocation.Z - GroundBelow(GetGameWorld(), PlayerLocation, Boss, Player).Z > 400.f;
+					if (BossFight.bJetIntercept)
+					{
+						// Never below the player: a falling one would lead it into the ground
+						const FVector Velocity = Player->GetVelocity();
+						BossFight.JetTo = PlayerLocation + FVector(Velocity.X, Velocity.Y, FMath::Max(Velocity.Z, 0.0)) * DiveTime + Approach * (Radius + 100.f);
+					}
+					else
+					{
+						// Next to the player, unless that is off the edge of the pillar or ledge they stand on: then right onto it
+						const FVector PlayerGround = GroundBelow(GetGameWorld(), PlayerLocation, Boss, Player);
+						const FVector BesideGround = GroundBelow(GetGameWorld(), PlayerLocation + Approach * (Radius + 300.f), Boss, Player);
+						BossFight.JetTo = (PlayerGround.Z - BesideGround.Z > 300.f ? PlayerGround : BesideGround) + FVector(0.f, 0.f, HalfHeight + 20.f);
+						GetGameWorld()->FindTeleportSpot(Boss, BossFight.JetTo, Boss->GetActorRotation());
+					}
+				}
+				DiveAlpha = FMath::Clamp(static_cast<float>((Now - BossFight.JetDiveStartTime) / DiveTime), 0.f, 1.f);
+				Position = FMath::Lerp(BossFight.JetFrom, BossFight.JetTo, DiveAlpha * DiveAlpha);
+				Pitch = -45.f;
+			}
 			if (Movement->MovementMode != MOVE_Flying)
 			{
 				Movement->SetMovementMode(MOVE_Flying);
 			}
 			Movement->StopMovementImmediately();
-			Boss->SetActorLocationAndRotation(Position, FRotator(0.f, (Player->GetActorLocation() - Position).Rotation().Yaw, 0.f));
-			if (Alpha >= 1.f)
+			Boss->SetActorLocationAndRotation(Position, FRotator(Pitch, (PlayerLocation - Position).Rotation().Yaw, 0.f));
+			for (const TWeakObjectPtr<UStaticMeshComponent>& Flame : BossFight.JetFlames)
+			{
+				if (Flame.IsValid())
+				{
+					Flame->SetRelativeScale3D(BossFight.JetFlameScale * FMath::FRandRange(0.85f, 1.15f));
+				}
+			}
+			if (DiveAlpha >= 1.f && BossFight.bJetIntercept)
+			{
+				const bool bRammed = FVector::Dist(Position, PlayerLocation) < Radius + 500.f;
+				if (bRammed && Player->GetHealthComponent())
+				{
+					// Hurts more and throws the player down
+					Player->GetHealthComponent()->TakeDamage(Player, 30.f * (Settings.Difficulty >= 3 ? 1.5f : Settings.Difficulty <= 1 ? 0.6f : 1.f), GetDefault<UDamageType>(), nullptr, Boss);
+					if (AFGHoverPack* HoverPack = Cast<AFGHoverPack>(Player->GetEquipmentInSlot(EEquipmentSlot::ES_BACK)))
+					{
+						HoverPack->SetHoverMode(EHoverPackMode::HPM_Inactive);
+					}
+					if (CanThrowPlayer(Player))
+					{
+						Player->LaunchCharacter(FVector(0.f, 0.f, -1000.f), true, true);
+					}
+				}
+				UE_LOG(LogChatControl, Log, TEXT("Titan jetpack: ram %s, %.0f m from the player, player health now %.0f"), bRammed ? TEXT("hit") : TEXT("missed"), FVector::Dist(Position, PlayerLocation) / 100.f,
+					Player->GetHealthComponent() ? Player->GetHealthComponent()->GetCurrentHealth() : 0.f);
+				// Carries on down to the ground; a free fall could cost the boss health. A player it just hit is spared the landing's shockwave too
+				BossFight.bJetRammed = bRammed;
+				BossFight.bJetIntercept = false;
+				BossFight.JetFrom = Position;
+				BossFight.JetTo = GroundBelow(GetGameWorld(), Position, Boss, Player) + FVector(0.f, 0.f, HalfHeight + 20.f);
+				GetGameWorld()->FindTeleportSpot(Boss, BossFight.JetTo, Boss->GetActorRotation());
+				BossFight.JetDiveStartTime = Now;
+			}
+			else if (DiveAlpha >= 1.f)
 			{
 				BossFight.bJetFlying = false;
-				BossFight.NextJetTime = Now + (BossFight.Stage >= 3 ? 5.0 : 8.0);
+				BossFight.NextJetTime = Now + (BossFight.Stage >= 3 ? 8.0 : 12.0);
+				BossFight.NextJetChaseTime = Now + 4.0;
+				// Without a jetpack the wait is for being out of reach, which the timer above already measures; a stuck boss must not sit on a tower for 12 s
+				if (!bHasJetpack)
+				{
+					BossFight.NextJetTime = Now + 4.0;
+				}
+				BossFight.NextStuckCheckTime = Now + 8.0;
+				BossFight.LastStuckGap = 0.f;
 				Movement->SetMovementMode(MOVE_Falling);
+				Boss->SetActorRotation(FRotator(0.f, Boss->GetActorRotation().Yaw, 0.f));
 				ShowFlames(false);
-				Shockwave(Player, Position, Radius + 900.f, 20.f * (Settings.Difficulty >= 3 ? 1.5f : Settings.Difficulty <= 1 ? 0.6f : 1.f), 1100.f, Boss);
-				UE_LOG(LogChatControl, Log, TEXT("Titan jetpack: landed %.0f m from the player"), FVector::Dist(Position, Player->GetActorLocation()) / 100.f);
+				if (!BossFight.bJetRammed)
+				{
+					Shockwave(Player, Position, Radius + 900.f, 25.f * (Settings.Difficulty >= 3 ? 1.5f : Settings.Difficulty <= 1 ? 0.6f : 1.f), 1200.f, Boss);
+				}
+				// The hard landing is the window to hit it
+				if (AFGCreature* Creature = Cast<AFGCreature>(Boss))
+				{
+					Creature->BeginStun(2.f);
+				}
+				UE_LOG(LogChatControl, Log, TEXT("Titan jetpack: landed %.0f m from the player, stunned: %d, player health now %.0f"), FVector::Dist(Position, PlayerLocation) / 100.f, Cast<AFGCreature>(Boss) && Cast<AFGCreature>(Boss)->IsStunned() ? 1 : 0,
+					Player->GetHealthComponent() ? Player->GetHealthComponent()->GetCurrentHealth() : 0.f);
 			}
 		}
 	}
@@ -742,7 +1062,7 @@ void UChatControlSubsystem::EnterBossStage(int32 Stage)
 		// Loot titans shed loot as they get hurt
 		if (AFGCharacterPlayer* Player = FindPlayer(); Player && BossFight.Boss.IsValid())
 		{
-			ChatEffects::DropLootCrate(GetGameWorld(), Player, BossFight.Boss->GetActorLocation() + FVector(0, 0, 100.f), 3, 0.4f);
+			ChatEffects::DropLootCrate(GetGameWorld(), Player, GroundBelow(GetGameWorld(), BossFight.Boss->GetActorLocation(), BossFight.Boss.Get(), Player) + FVector(0, 0, 100.f), 3, 0.4f);
 		}
 		Announce(FText::Format(Tr(TEXT("{0} drops some loot! Stage {1}/3"), TEXT("{0} роняет лут! Стадия {1}/3")), Title, FText::AsNumber(Stage)));
 		Announce(Stage == 2
@@ -823,7 +1143,8 @@ int32 UChatControlSubsystem::SummonMinions(int32 Count)
 		{
 			// A crab nest on the ground that bursts into flying crabs when the player is near
 			FVector NestLocation;
-			if (FindGroundNear(World, Player, 500.f, 900.f, NestLocation))
+			// No ground around a player up in the air or on a tower: then around the boss
+			if (FindGroundNear(World, Player, 500.f, 900.f, NestLocation) || (BossFight.Boss.IsValid() && FindGroundNear(World, BossFight.Boss.Get(), 500.f, 900.f, NestLocation)))
 			{
 				FActorSpawnParameters NestParams;
 				NestParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
@@ -844,7 +1165,8 @@ int32 UChatControlSubsystem::SummonMinions(int32 Count)
 			Default->GetCapsuleComponent()->GetScaledCapsuleSize(Radius, HalfHeight);
 		}
 		FVector Location;
-		if (!MinionClass || !ChatEffects::FindCreatureSpot(World, Player, Settings, Radius, HalfHeight, Location))
+		if (!MinionClass || !(ChatEffects::FindCreatureSpot(World, Player, Settings, Radius, HalfHeight, Location)
+			|| (BossFight.Boss.IsValid() && ChatEffects::FindCreatureSpot(World, BossFight.Boss.Get(), Settings, Radius, HalfHeight, Location))))
 		{
 			continue;
 		}
@@ -885,6 +1207,19 @@ void UChatControlSubsystem::EndBossFight(bool bDestroyBoss)
 		if (ACharacter* Flyer = Cast<ACharacter>(BossFight.Boss.Get()); Flyer && Flyer->GetCharacterMovement())
 		{
 			Flyer->GetCharacterMovement()->SetMovementMode(MOVE_Falling);
+			Flyer->SetActorRotation(FRotator(0.f, Flyer->GetActorRotation().Yaw, 0.f));
+		}
+	}
+	// The capsule of a boss killed in the air stays up there, and what hangs on it would too
+	if (BossFight.Bar.IsValid())
+	{
+		BossFight.Bar->DestroyComponent();
+	}
+	for (const TWeakObjectPtr<UStaticMeshComponent>& Flame : BossFight.JetFlames)
+	{
+		if (Flame.IsValid())
+		{
+			Flame->DestroyComponent();
 		}
 	}
 	BossFight = FBossFight();

@@ -65,15 +65,70 @@ bool UChatControlSubsystem::HandleGameCommand(const FChatEvent& Event, const FSt
 	return false;
 }
 
+TArray<UChatControlSubsystem::FPotGoal> UChatControlSubsystem::GetPotGoals() const
+{
+	TArray<FPotGoal> Goals;
+	if (Settings.bGoalEnabled)
+	{
+		if (Settings.GoalChips > 0 && Effects.Contains(Settings.GoalEffect))
+		{
+			Goals.Add({ 0, Settings.GoalEffect, Settings.GoalChips });
+		}
+		// The same effect twice would only split chat's chips
+		if (Settings.GoalChips2 > 0 && Effects.Contains(Settings.GoalEffect2) && Settings.GoalEffect2 != Settings.GoalEffect)
+		{
+			Goals.Add({ 1, Settings.GoalEffect2, Settings.GoalChips2 });
+		}
+	}
+	return Goals;
+}
+
 void UChatControlSubsystem::HandlePotCommand(const FChatEvent& Event, const FString& Args)
 {
-	const FString* GoalEffect = Settings.GoalEffect.IsEmpty() ? nullptr : &Settings.GoalEffect;
-	if (!Settings.bGoalEnabled || !GoalEffect || !Effects.Contains(*GoalEffect) || Settings.GoalChips <= 0)
+	const TArray<FPotGoal> Goals = GetPotGoals();
+	if (Goals.Num() == 0)
 	{
 		return;
 	}
+
+	// "!pot 100" goes to the first pot; "!pot titan 100" or "!pot 100 titan" picks one
+	TArray<FString> Parts;
+	Args.ParseIntoArrayWS(Parts);
+	int32 Amount = 0;
+	const FPotGoal* Goal = nullptr;
+	bool bUnknownPot = false;
+	for (const FString& Part : Parts)
+	{
+		if (Part.IsNumeric())
+		{
+			Amount = FCString::Atoi(*Part);
+			continue;
+		}
+		Goal = Goals.FindByPredicate([&Part](const FPotGoal& Candidate)
+		{
+			return Part == Candidate.Effect || (Candidate.Effect == TEXT("titan") && Part == TEXT("титан")) || (Candidate.Effect == TEXT("boss") && Part == TEXT("босс"));
+		});
+		bUnknownPot = !Goal;
+	}
+	if (bUnknownPot || (Amount <= 0 && !Goal))
+	{
+		// Asked with no amount or with a pot that doesn't exist: how all of them stand
+		TArray<FString> Lines;
+		for (const FPotGoal& Candidate : Goals)
+		{
+			Lines.Add(FString::Printf(TEXT("!%s %d/%d"), *Candidate.Effect, Economy.GetPot(Candidate.Index), Candidate.Chips));
+		}
+		Announce(FText::Format(Tr(TEXT("Pots: {0}. Chip in with !pot <amount> or !pot {1} <amount>"), TEXT("Копилки: {0}. Скинуться: !pot <сколько> или !pot {1} <сколько>")),
+			FText::FromString(FString::Join(Lines, TEXT(", "))), FText::FromString(Goals.Last().Effect)));
+		return;
+	}
+	if (!Goal)
+	{
+		Goal = &Goals[0];
+	}
+	const FString& GoalEffect = Goal->Effect;
+
 	const FString Key = Event.GetEconomyKey();
-	const int32 Amount = FCString::Atoi(*Args);
 	if (Amount > 0)
 	{
 		const FChatViewerRecord* Before = Economy.Find(Key);
@@ -85,19 +140,19 @@ void UChatControlSubsystem::HandlePotCommand(const FChatEvent& Event, const FStr
 				FText::FromString(Event.DisplayName), FText::AsNumber(Amount), FText::AsNumber(Record ? Record->Chips : 0)));
 			return;
 		}
-		Economy.AddToPot(Amount);
+		Economy.AddToPot(Amount, Goal->Index);
 		CheckRankUp(Key, SpentBefore);
 	}
 
-	if (Economy.GetPot() >= Settings.GoalChips)
+	if (Economy.GetPot(Goal->Index) >= Goal->Chips)
 	{
-		Economy.AddToPot(-Settings.GoalChips);
-		Announce(FText::Format(Tr(TEXT("The pot is full! Chat unleashes !{0}!"), TEXT("Копилка собрана! Чат запускает !{0}!")), FText::FromString(*GoalEffect)));
-		RequestEffect(*GoalEffect, TEXT("system:pot"), Tr(TEXT("Chat"), TEXT("Чат")).ToString(), true);
+		Economy.AddToPot(-Goal->Chips, Goal->Index);
+		Announce(FText::Format(Tr(TEXT("The pot is full! Chat unleashes !{0}!"), TEXT("Копилка собрана! Чат запускает !{0}!")), FText::FromString(GoalEffect)));
+		RequestEffect(GoalEffect, TEXT("system:pot"), Tr(TEXT("Chat"), TEXT("Чат")).ToString(), true);
 		return;
 	}
 	Announce(FText::Format(Tr(TEXT("Pot for !{0}: {1}/{2} chips. Chip in with !pot <amount>"), TEXT("Копилка на !{0}: {1}/{2} чипов. Скинуться: !pot <сколько>")),
-		FText::FromString(*GoalEffect), FText::AsNumber(Economy.GetPot()), FText::AsNumber(Settings.GoalChips)));
+		FText::FromString(GoalEffect), FText::AsNumber(Economy.GetPot(Goal->Index)), FText::AsNumber(Goal->Chips)));
 }
 
 void UChatControlSubsystem::TickVotes(double Now)

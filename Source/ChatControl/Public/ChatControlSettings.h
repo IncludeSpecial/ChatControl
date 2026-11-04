@@ -134,8 +134,11 @@ struct FChatControlSettings
 	UPROPERTY() int32 VoteReward = 5;
 	/** Shared pot: when chat fills GoalChips together, GoalEffect runs */
 	UPROPERTY() bool bGoalEnabled = true;
-	UPROPERTY() FString GoalEffect = TEXT("titan");
+	UPROPERTY() FString GoalEffect = TEXT("boss");
 	UPROPERTY() int32 GoalChips = 1000;
+	/** A second pot, filled with !pot <effect> <chips>; 0 chips or the same effect as the first = no second pot */
+	UPROPERTY() FString GoalEffect2 = TEXT("titan");
+	UPROPERTY() int32 GoalChips2 = 3000;
 
 	// --- OBS overlay ---
 	UPROPERTY() bool bOverlayEnabled = true;
@@ -160,6 +163,16 @@ struct FChatControlSettings
 	UPROPERTY() int32 TitanCallerChips = 200;
 	/** Peaceful giant wildlife can show up as a loot titan */
 	UPROPERTY() bool bPeacefulTitans = true;
+	/** Staying in the air during a fight burns jetpack fuel, shuts down the hover pack and hurts */
+	UPROPERTY() bool bTitanJamFlight = true;
+	/** Seconds in the air before that starts */
+	UPROPERTY() float TitanFlightGraceSeconds = 3.f;
+	/** Titans without a jetpack also fly over to a player who stays high above them */
+	UPROPERTY() bool bTitanLeapToPlayer = true;
+	/** Seconds the player may stay out of reach before that */
+	UPROPERTY() float TitanLeapSeconds = 6.f;
+	/** Titans push away a player who ends up under them, where the camera would be inside the model */
+	UPROPERTY() bool bTitanPushPlayer = true;
 
 	// --- FICSIT Chips economy ---
 	UPROPERTY() int32 ChipsPerInterval = 10;

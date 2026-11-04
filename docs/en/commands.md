@@ -13,7 +13,8 @@ Commands are typed in Twitch or YouTube chat. Answers appear in the game chat an
 | `!give <nick> <amount>` / `!передать` | Give chips to another viewer. 10-500 per transfer, 10% goes to the pot, 1000 sent and 1000 received per day, one transfer a minute; only to viewers who have chatted before |
 | `!effects`, `!help` | All enabled effects with current prices |
 | `!1` `!2` `!3`, `!vote N` / `!голос N` | Vote during a chat vote (free, gives a few chips) |
-| `!pot N` / `!копилка N` | Put N chips into the shared pot; a full pot summons a titan (on new installs) |
+| `!pot N` / `!копилка N` | Put N chips into the first shared pot; when full, it summons a boss (on new installs) |
+| `!pot titan N` | Put N chips into the second pot; when full, it summons a titan. `!pot` alone shows how both stand |
 | `!top` / `!топ` | Top viewers by chips spent |
 | `!stats` / `!статистика` | Stats of the current session |
 
@@ -98,9 +99,11 @@ and loot titans - Sky Giraffe, Colossal Beetle, Giant Strider - that follow you,
 
 **Traits:** Armored (more health), Swift (faster), Colossal (bigger), Undying (heals when left alone), Summoning (minions every 30 s),
 Nocturnal (night), Misty (fog), Sparking (blackout at stage 2), Bloodthirsty (heals when it hits you), Rabid (faster as it gets hurt), Radioactive (hurts you within 10 m),
-with a Jetpack (flies at you every few seconds and lands with a shockwave).
+with a Jetpack (climbs, hangs over you and dives at the spot where you stood: move away to dodge, and it is stunned for 2 s after landing; if you are in the air, it rams you and throws you down; under a roof, in a cave or in the safe zone it stays on foot).
 
 **Stages:** at 66% the boss gets angry and calls help, at 33% it goes all in. One titan at a time; another one waits in the queue.
+**Flying:** you can't wait out a fight in the air. After 3 s in flight your jetpack loses half its fuel and you take damage every 2 s, and the hover pack shuts down.
+**Out of reach:** if you stay at least 5 m above or below a titan for 6 s, it gets stuck and can't reach you, or it hasn't hurt you for 12 s, it flies over to you, jetpack or not. Under a roof it stays on foot.
 **Victory:** a loot crate and 50 chips for every active viewer. **Defeat:** the summoner gets 200 chips. After 5 minutes the titan leaves.
 `!boss` stays a quick alpha monster without a fight.
 

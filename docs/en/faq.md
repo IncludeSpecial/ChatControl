@@ -29,6 +29,17 @@ A titan that was alive when the game was saved comes back after loading, without
 - It needs the chaos budget (4 points): right after other harmful effects it may wait up to a minute.
 - `!test titan` tells you in the game chat when it can't run right now.
 
+### A titan without a jetpack flew over to me
+That is on purpose: you can't shoot a titan from safety. It flies over if you stay at least 5 m above or below it for 6 s, if it can't get closer to you, or if it hasn't hurt you for 12 s.
+It stays on foot while there is a roof over you or you are in the safe zone. Turn it off with **Raids and titans -> Titans reach you up high**.
+
+### My jetpack runs out of fuel during a titan fight
+Staying in the air burns it: after 3 s of powered flight the jetpack loses half its fuel and you take damage every 2 s, and the hover pack shuts down.
+Falling and parachutes don't count. Turn it off with **Raids and titans -> Titans jam flight**.
+
+### How do viewers see their chips without typing `!chips`?
+Add the `balance.html` widget to OBS: see [Setup](setup.md).
+
 ### How do viewers give chips to each other?
 `!give <nick> <amount>` (or `!передать`). 10-500 per transfer, 10% goes to the shared pot, 1000 sent and 1000 received
 per viewer per day, one transfer a minute, only to viewers who have chatted before. All limits are in **Chip transfers**.

@@ -1,0 +1,58 @@
+<!doctype html>
+<!--
+  ChatControl chips of the viewers who are in chat now, so they don't have to ask with !chips.
+  OBS: Sources -> + -> Browser, URL http://localhost:8787/obs/balance.html, size 460x420 (Local file unchecked).
+  ?n=12 shows more rows (8 by default). Hidden while nobody is active.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<title>ChatControl balance</title>
+<link rel="stylesheet" href="assets/ficsit.css">
+<style>
+  .box { position: absolute; left: 10px; top: 10px; width: 420px; padding: 22px 22px 18px; box-sizing: border-box; transition: opacity .4s; }
+  .box.offline { opacity: 0; }
+  .list { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .row { display: flex; gap: 10px; align-items: baseline; font-size: 22px; font-weight: 600; }
+  .row .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .delta { font-size: 17px; font-weight: 700; color: #8fe388; }
+  .row .delta.minus { color: #ff8a7a; }
+  .row .chips { color: var(--orange); font-weight: 700; }
+</style>
+</head>
+<body>
+  <div class="box plate offline" id="box">
+    <div class="caption" id="label"></div>
+    <div class="list" id="list"></div>
+  </div>
+<script src="assets/chatcontrol.js"></script>
+<script>
+  const box = document.getElementById("box");
+  const rows = parseInt(new URLSearchParams(location.search).get("n")) || 8;
+  ccZoom(box);
+
+  // The last change of each viewer stays next to the number for a few seconds
+  const known = new Map();
+  const DELTA_MS = 5000;
+
+  ccPoll(state => {
+    const balances = state ? state.balances || [] : [];
+    box.classList.toggle("offline", !balances.length);
+    if (!balances.length) return;
+    document.getElementById("label").textContent = ccT("balance");
+    const now = Date.now();
+    balances.forEach(b => {
+      const seen = known.get(b.name);
+      if (!seen) known.set(b.name, { chips: b.chips, delta: 0, until: 0 });
+      else if (seen.chips !== b.chips) known.set(b.name, { chips: b.chips, delta: b.chips - seen.chips, until: now + DELTA_MS });
+    });
+    document.getElementById("list").innerHTML = balances.slice(0, rows).map(b => {
+      const seen = known.get(b.name);
+      const delta = seen.until > now
+        ? `<span class="delta ${seen.delta < 0 ? "minus" : ""}">${seen.delta > 0 ? "+" : ""}${ccEsc(seen.delta)}</span>` : "";
+      return `<div class="row"><span class="name">${ccEsc(b.name)}</span>${delta}<span class="chips">${ccEsc(b.chips)}</span></div>`;
+    }).join("");
+  }, 1500);
+</script>
+</body>
+</html>

@@ -174,6 +174,24 @@ int32 FChatEconomy::PayActiveViewers(double Now, double ActiveWindow, int32 Amou
 	return Paid;
 }
 
+TArray<TPair<FString, int32>> FChatEconomy::GetActiveBalances(double Now, double ActiveWindow, int32 Count) const
+{
+	TArray<TPair<FString, int32>> Result;
+	for (const auto& Pair : Data.Viewers)
+	{
+		if (Pair.Value.LastMessageTime >= 0.0 && Now - Pair.Value.LastMessageTime <= ActiveWindow && !Pair.Key.StartsWith(TEXT("system:")))
+		{
+			Result.Add({ Pair.Value.DisplayName, Pair.Value.Chips });
+		}
+	}
+	Result.Sort([](const TPair<FString, int32>& A, const TPair<FString, int32>& B) { return A.Value > B.Value; });
+	if (Result.Num() > Count)
+	{
+		Result.SetNum(Count);
+	}
+	return Result;
+}
+
 TArray<TPair<FString, int32>> FChatEconomy::GetTopSpenders(int32 Count) const
 {
 	TArray<TPair<FString, int32>> Result;

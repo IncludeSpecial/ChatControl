@@ -247,7 +247,27 @@ FString UChatControlSubsystem::BuildOverlayJson() const
 	Pot->SetStringField(TEXT("effect"), Settings.GoalEffect);
 	Pot->SetNumberField(TEXT("current"), Economy.GetPot());
 	Pot->SetNumberField(TEXT("goal"), Settings.GoalChips);
+	TArray<TSharedPtr<FJsonValue>> Pots;
+	for (const FPotGoal& Goal : GetPotGoals())
+	{
+		TSharedRef<FJsonObject> Item = MakeShared<FJsonObject>();
+		Item->SetStringField(TEXT("effect"), Goal.Effect);
+		Item->SetNumberField(TEXT("current"), Economy.GetPot(Goal.Index));
+		Item->SetNumberField(TEXT("goal"), Goal.Chips);
+		Pots.Add(MakeShared<FJsonValueObject>(Item));
+	}
+	Pot->SetArrayField(TEXT("pots"), Pots);
 	Root->SetObjectField(TEXT("pot"), Pot);
+
+	TArray<TSharedPtr<FJsonValue>> Balances;
+	for (const TPair<FString, int32>& Entry : Economy.GetActiveBalances(FPlatformTime::Seconds(), Settings.ActiveWindowSeconds, 30))
+	{
+		TSharedRef<FJsonObject> Item = MakeShared<FJsonObject>();
+		Item->SetStringField(TEXT("name"), Entry.Key);
+		Item->SetNumberField(TEXT("chips"), Entry.Value);
+		Balances.Add(MakeShared<FJsonValueObject>(Item));
+	}
+	Root->SetArrayField(TEXT("balances"), Balances);
 
 	TArray<TSharedPtr<FJsonValue>> Top;
 	for (const TPair<FString, int32>& Entry : Economy.GetTopSpenders(5))

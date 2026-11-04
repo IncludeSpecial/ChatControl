@@ -43,7 +43,7 @@ The mod reads YouTube live chat through the free YouTube Data API. You need an A
 
 ## 4. OBS widgets (optional)
 
-While the game is running, the mod serves three widgets from this PC only (`127.0.0.1`).
+While the game is running, the mod serves these widgets from this PC only (`127.0.0.1`).
 
 In OBS: **Sources -> + -> Browser**, uncheck **Local file**, paste the URL and set the size:
 
@@ -51,7 +51,8 @@ In OBS: **Sources -> + -> Browser**, uncheck **Local file**, paste the URL and s
 |---|---|---|
 | Event feed: who triggered what, raids, subs | `http://localhost:8787/obs/feed.html` | 560 x 600 |
 | Vote (visible only while a vote runs) | `http://localhost:8787/obs/vote.html` | 760 x 330 |
-| Shared pot and top viewers | `http://localhost:8787/obs/pot.html` | 640 x 330 |
+| Shared pots for a boss and a titan, top viewers | `http://localhost:8787/obs/pot.html` | 640 x 450 |
+| Chips of the viewers in chat, so nobody has to type `!chips` (hidden while nobody is active; `?n=12` shows more rows) | `http://localhost:8787/obs/balance.html` | 460 x 420 |
 | Titan fight: boss, health bar, stage (visible only during a fight) | `http://localhost:8787/obs/boss.html` | 760 x 190 |
 
 - Without the game the widgets are empty; they come alive by themselves once the game starts.
@@ -62,7 +63,7 @@ In OBS: **Sources -> + -> Browser**, uncheck **Local file**, paste the URL and s
 **Own design:** copy the files from [`Resources/Overlay`](../../Resources/Overlay) into any folder, change colors in
 `assets/ficsit.css` (or anything else) and set the folder in **Mods -> ChatControl -> OBS overlay -> Widget folder**.
 Your files open as `http://localhost:8787/obs/<file name>`, the built-in ones keep working.
-Live data is at `http://localhost:8787/state` (JSON: events, vote, pot, top, chaos, language).
+Live data is at `http://localhost:8787/state` (JSON: events, vote, pot, top, balances, chaos, boss, language).
 
 ## 5. Tell your viewers
 

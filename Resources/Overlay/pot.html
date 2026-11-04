@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
-  ChatControl shared pot and top viewers.
-  OBS: Sources -> + -> Browser, URL http://localhost:8787/obs/pot.html, size 640x330 (Local file unchecked).
+  ChatControl shared pots and top viewers.
+  OBS: Sources -> + -> Browser, URL http://localhost:8787/obs/pot.html, size 640x450 (Local file unchecked).
 -->
 <html>
 <head>
@@ -9,9 +9,10 @@
 <title>ChatControl pot</title>
 <link rel="stylesheet" href="assets/ficsit.css">
 <style>
-  .box { position: absolute; left: 10px; top: 10px; width: 600px; padding: 22px 22px 18px; transition: opacity .4s; }
+  .box { position: absolute; left: 10px; top: 10px; width: 620px; box-sizing: border-box; padding: 22px 22px 18px; transition: opacity .4s; }
   .box.offline { opacity: 0; }
-  .pot { display: flex; justify-content: space-between; align-items: baseline; margin: 10px 0; }
+  .item { margin-top: 12px; }
+  .pot { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
   .goal { font-size: 30px; }
   .nums { font-size: 24px; font-weight: 700; color: var(--orange); }
   .bar { height: 16px; background: var(--panel-light); }
@@ -22,15 +23,14 @@
   .row .n { font-weight: 700; color: var(--orange); width: 30px; }
   .row .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .row .chips { color: var(--orange); font-weight: 700; }
-  .hint { margin-top: 14px; font-size: 15px; font-weight: 600; color: var(--muted); }
+  .hint { margin-top: 14px; font-size: 15px; font-weight: 600; color: var(--muted); line-height: 1.4; }
 </style>
 </head>
 <body>
   <div class="box plate offline" id="box">
     <div id="potBlock">
       <div class="caption" id="label"></div>
-      <div class="pot"><div class="goal title" id="goal"></div><div class="nums" id="nums"></div></div>
-      <div class="bar"><div id="fill"></div></div>
+      <div id="pots"></div>
     </div>
     <div class="top" id="top"></div>
     <div class="hint" id="hint"></div>
@@ -38,19 +38,38 @@
 <script src="assets/chatcontrol.js"></script>
 <script>
   const box = document.getElementById("box");
+  const potsEl = document.getElementById("pots");
   ccZoom(box);
+
+  // Elements stay between polls, so the bars slide instead of jumping
+  function renderPots(pots) {
+    while (potsEl.children.length > pots.length) potsEl.lastChild.remove();
+    while (potsEl.children.length < pots.length) {
+      const item = document.createElement("div");
+      item.className = "item";
+      item.innerHTML = `<div class="pot"><div class="goal title"></div><div class="nums"></div></div><div class="bar"><div></div></div>`;
+      potsEl.appendChild(item);
+    }
+    pots.forEach((pot, i) => {
+      const item = potsEl.children[i];
+      item.querySelector(".goal").innerHTML = ccT("potFor") + " " + ccName(pot.effect);
+      item.querySelector(".nums").textContent = `${pot.current} / ${pot.goal}`;
+      item.querySelector(".bar div").style.width = Math.min(100, pot.goal ? pot.current / pot.goal * 100 : 0) + "%";
+    });
+  }
+
   ccPoll(state => {
     box.classList.toggle("offline", !state);
     if (!state) return;
-    const pot = state.pot;
-    document.getElementById("potBlock").style.display = pot.enabled ? "" : "none";
+    const pots = state.pot.pots || [];
+    document.getElementById("potBlock").style.display = pots.length ? "" : "none";
     document.getElementById("label").textContent = ccT("pot");
-    document.getElementById("goal").innerHTML = ccT("potFor") + " " + ccName(pot.effect);
-    document.getElementById("nums").textContent = `${pot.current} / ${pot.goal}`;
-    document.getElementById("fill").style.width = Math.min(100, pot.goal ? pot.current / pot.goal * 100 : 0) + "%";
+    renderPots(pots);
     document.getElementById("top").innerHTML = (state.top || []).slice(0, 3).map((t, i) =>
       `<div class="row"><span class="n">${i + 1}</span><span class="name">${ccEsc(t.name)}</span><span class="chips">${ccEsc(t.chips)}</span></div>`).join("");
-    document.getElementById("hint").textContent = ccT("hint");
+    // "!pot <chips> for BOSS · !pot titan <chips> for TITAN"
+    const commands = pots.map((pot, i) => `!pot ${i ? ccEsc(pot.effect) + " " : ""}${ccEsc(ccT("chipsArg"))} ${ccT("potFor")} ${ccName(pot.effect)}`).join(" · ");
+    document.getElementById("hint").innerHTML = (commands ? commands + "<br>" : "") + ccEsc(ccT("hint"));
   }, 2000);
 </script>
 </body>

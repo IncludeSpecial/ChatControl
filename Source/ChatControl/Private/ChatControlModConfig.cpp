@@ -386,6 +386,9 @@ void UChatControlModConfig::Register(UConfigManager* ConfigManager, const FChatC
 		Tr(TEXT("Viewers chip in with !pot <amount>; when it is full the effect below runs"), TEXT("Зрители скидываются командой !pot <сколько>; когда копилка полна, запускается эффект ниже")));
 	AddString(Games, TEXT("GoalEffect"), Defaults.GoalEffect, Tr(TEXT("Pot effect"), TEXT("Эффект копилки")));
 	AddInt(Games, TEXT("GoalChips"), Defaults.GoalChips, Tr(TEXT("Pot size (chips)"), TEXT("Размер копилки (чипы)")));
+	AddString(Games, TEXT("GoalEffect2"), Defaults.GoalEffect2, Tr(TEXT("Second pot effect"), TEXT("Эффект второй копилки")),
+		Tr(TEXT("Viewers fill it with !pot <effect> <amount>. Empty or the same as the first = no second pot"), TEXT("Зрители скидываются командой !pot <эффект> <сколько>. Пусто или то же, что в первой = второй копилки нет")));
+	AddInt(Games, TEXT("GoalChips2"), Defaults.GoalChips2, Tr(TEXT("Second pot size (chips)"), TEXT("Размер второй копилки (чипы)")));
 
 	// --- OBS ---
 	UConfigPropertySection* Obs = AddSection(Root, TEXT("Obs"), Tr(TEXT("OBS overlay"), TEXT("Оверлей OBS")));
@@ -457,6 +460,21 @@ void UChatControlModConfig::Register(UConfigManager* ConfigManager, const FChatC
 	AddBool(Raids, TEXT("PeacefulTitans"), Defaults.bPeacefulTitans,
 		Tr(TEXT("Peaceful loot titans"), TEXT("Мирные титаны с лутом")),
 		Tr(TEXT("Giant giraffes, beetles and striders that drop loot"), TEXT("Огромные жирафы, жуки и страусы, из которых падает лут")));
+	AddBool(Raids, TEXT("TitanJamFlight"), Defaults.bTitanJamFlight,
+		Tr(TEXT("Titans jam flight"), TEXT("Титаны глушат полёт")),
+		Tr(TEXT("Staying in the air during a fight burns jetpack fuel, shuts down the hover pack and hurts, so you can't wait it out up there"),
+		   TEXT("Если долго держаться в воздухе, горит топливо ранца, отключается ховерпак и идёт урон: отсидеться наверху не получится")));
+	AddInt(Raids, TEXT("TitanFlightGraceSeconds"), FMath::RoundToInt(Defaults.TitanFlightGraceSeconds),
+		Tr(TEXT("Seconds in the air before jamming"), TEXT("Секунд в воздухе до глушения")));
+	AddBool(Raids, TEXT("TitanLeapToPlayer"), Defaults.bTitanLeapToPlayer,
+		Tr(TEXT("Titans reach you up high"), TEXT("Титаны достают на высоте")),
+		Tr(TEXT("A player who stays on a tower or a ledge above the titan gets a visit, so you can't shoot it from safety"),
+		   TEXT("Если стоять на башне или уступе выше титана, он прилетит к тебе: стрелять сверху безнаказанно не получится")));
+	AddInt(Raids, TEXT("TitanLeapSeconds"), FMath::RoundToInt(Defaults.TitanLeapSeconds),
+		Tr(TEXT("Seconds up high before it comes"), TEXT("Секунд на высоте до прилёта")));
+	AddBool(Raids, TEXT("TitanPushPlayer"), Defaults.bTitanPushPlayer,
+		Tr(TEXT("Titans push you out from under them"), TEXT("Титаны отталкивают из-под себя")),
+		Tr(TEXT("Otherwise the camera can end up inside the titan's model"), TEXT("Иначе камера может оказаться внутри модели титана")));
 	AddInt(Raids, TEXT("BossMinViewers"), Defaults.RaidBossMinViewers,
 		Tr(TEXT("Boss from N raiders"), TEXT("Босс от N зрителей рейда")),
 		Tr(TEXT("0 = never"), TEXT("0 = никогда")));
@@ -589,6 +607,8 @@ bool UChatControlModConfig::ApplyTo(UConfigManager* ConfigManager, FChatControlS
 	bChanged |= Read<UConfigPropertyBool>(Games, TEXT("Goal"), Settings.bGoalEnabled);
 	bChanged |= Read<UConfigPropertyString>(Games, TEXT("GoalEffect"), Settings.GoalEffect);
 	bChanged |= Read<UConfigPropertyInteger>(Games, TEXT("GoalChips"), Settings.GoalChips);
+	bChanged |= Read<UConfigPropertyString>(Games, TEXT("GoalEffect2"), Settings.GoalEffect2);
+	bChanged |= Read<UConfigPropertyInteger>(Games, TEXT("GoalChips2"), Settings.GoalChips2);
 
 	const UConfigPropertySection* Obs = GetSection(Root, TEXT("Obs"));
 	bChanged |= Read<UConfigPropertyBool>(Obs, TEXT("Enabled"), Settings.bOverlayEnabled);
@@ -643,6 +663,11 @@ bool UChatControlModConfig::ApplyTo(UConfigManager* ConfigManager, FChatControlS
 	bChanged |= Read<UConfigPropertyInteger>(Raids, TEXT("TitanRewardChips"), Settings.TitanRewardChips);
 	bChanged |= Read<UConfigPropertyInteger>(Raids, TEXT("TitanCallerChips"), Settings.TitanCallerChips);
 	bChanged |= Read<UConfigPropertyBool>(Raids, TEXT("PeacefulTitans"), Settings.bPeacefulTitans);
+	bChanged |= Read<UConfigPropertyBool>(Raids, TEXT("TitanJamFlight"), Settings.bTitanJamFlight);
+	bChanged |= ReadSeconds(Raids, TEXT("TitanFlightGraceSeconds"), Settings.TitanFlightGraceSeconds);
+	bChanged |= Read<UConfigPropertyBool>(Raids, TEXT("TitanLeapToPlayer"), Settings.bTitanLeapToPlayer);
+	bChanged |= ReadSeconds(Raids, TEXT("TitanLeapSeconds"), Settings.TitanLeapSeconds);
+	bChanged |= Read<UConfigPropertyBool>(Raids, TEXT("TitanPushPlayer"), Settings.bTitanPushPlayer);
 
 	const UConfigPropertySection* Advanced = GetSection(Root, TEXT("Advanced"));
 	bChanged |= Read<UConfigPropertyInteger>(Advanced, TEXT("ChaosBudgetPerMinute"), Settings.ChaosBudgetPerMinute);

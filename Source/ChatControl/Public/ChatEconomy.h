@@ -33,6 +33,8 @@ struct FChatEconomyData
 	UPROPERTY() TMap<FString, FChatViewerRecord> Viewers;
 	/** Shared chip pot chat fills together */
 	UPROPERTY() int32 Pot = 0;
+	/** The second pot, for a bigger effect */
+	UPROPERTY() int32 Pot2 = 0;
 };
 
 enum class EChipTransfer : uint8
@@ -75,10 +77,18 @@ public:
 
 	bool IsDirty() const { return bDirty; }
 
-	int32 GetPot() const { return Data.Pot; }
-	void AddToPot(int32 Amount) { Data.Pot = FMath::Max(0, Data.Pot + Amount); bDirty = true; }
+	/** Index: 0 = the first pot, 1 = the second */
+	int32 GetPot(int32 Index = 0) const { return Index == 0 ? Data.Pot : Data.Pot2; }
+	void AddToPot(int32 Amount, int32 Index = 0)
+	{
+		int32& Pot = Index == 0 ? Data.Pot : Data.Pot2;
+		Pot = FMath::Max(0, Pot + Amount);
+		bDirty = true;
+	}
 	/** (display name, chips spent), highest first */
 	TArray<TPair<FString, int32>> GetTopSpenders(int32 Count) const;
+	/** (display name, chips) of viewers who wrote within ActiveWindow, richest first */
+	TArray<TPair<FString, int32>> GetActiveBalances(double Now, double ActiveWindow, int32 Count) const;
 
 private:
 	static FString GetSavePath();
