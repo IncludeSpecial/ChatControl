@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.4
+
+### New
+- `!test titan <boss> <traits>` picks the traits too, e.g. `!test titan queen radioactive`.
+- `!test as <nick> <message>` writes as a plain viewer, to try `!give` and the like without a second account.
+
+### Changed
+- Titans with a Jetpack really fly: they wear the game's jetpack with flames, rise about 15 m and land next to the player with a shockwave, from any distance and on peaceful titans too.
+
+### Fixed
+- Viewers could choose the boss by typing `!titan giraffe`, even with peaceful titans turned off. Now only `!test` can.
+- Russian titan messages no longer use "он" for female bosses or forms like "победил(а)".
+
 ## 0.1.3
 
 ### New

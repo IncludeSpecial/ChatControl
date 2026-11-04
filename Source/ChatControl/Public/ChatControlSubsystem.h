@@ -85,10 +85,10 @@ public:
 	/** Puts the viewer's name over the machine the player looks at (or the nearest one); kept in the save */
 	bool NameBuilding(const FString& ViewerKey, const FString& ViewerName);
 	/**
-	 * Starts a titan fight: a random boss (or BossId) with random traits, three stages and a health bar.
+	 * Starts a titan fight: a random boss with random traits (or those named in TestPicks), three stages and a health bar.
 	 * False while another fight runs or near the HUB, so the request waits in the chaos queue.
 	 */
-	bool StartTitan(const FString& ViewerKey, const FString& ViewerName, const FChatEffectSettings& Effect, const FString& BossId);
+	bool StartTitan(const FString& ViewerKey, const FString& ViewerName, const FChatEffectSettings& Effect, const FString& TestPicks);
 
 private:
 	struct FPendingChaos
@@ -264,6 +264,14 @@ private:
 		double NextLeapTime = 0.0;
 		double LeapStartTime = 0.0;
 		bool bLeaping = false;
+		/** Jetpack flight: TickBoss moves the boss itself, so the AI and attacks can't stop it */
+		bool bJetFlying = false;
+		double NextJetTime = 0.0;
+		double JetStartTime = 0.0;
+		double JetDuration = 1.0;
+		FVector JetFrom = FVector::ZeroVector;
+		FVector JetTo = FVector::ZeroVector;
+		TArray<TWeakObjectPtr<class UStaticMeshComponent>> JetFlames;
 		TArray<TWeakObjectPtr<APawn>> Minions;
 	};
 	FBossFight BossFight;

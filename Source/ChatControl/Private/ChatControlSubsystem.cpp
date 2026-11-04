@@ -562,7 +562,8 @@ void UChatControlSubsystem::HandleCommand(const FChatEvent& Event)
 
 	if (Effects.Contains(Command))
 	{
-		RequestEffect(Command, Key, Event.DisplayName, false, RawArgs);
+		// Text after !titan would pick the boss and traits; that is only for !test
+		RequestEffect(Command, Key, Event.DisplayName, false, Command == TEXT("titan") ? FString() : RawArgs);
 	}
 }
 
@@ -691,6 +692,22 @@ void UChatControlSubsystem::HandleTestCommand(const FChatEvent& Event, const FSt
 	{
 		LastTriggerTime = -Settings.AutoChaosIdleSeconds;
 	}
+	else if (What == TEXT("as") && !AmountText.IsEmpty())
+	{
+		// "!test as bob !give someone 50": a plain viewer says it, for what needs a second person in chat
+		FString Nick = AmountText;
+		AmountText.Split(TEXT(" "), &Nick, &Fake.Text);
+		Fake.UserId = TEXT("test-") + Nick;
+		Fake.DisplayName = Nick;
+		Fake.bIsBroadcaster = Fake.bIsModerator = Fake.bIsVip = Fake.bIsSubscriber = false;
+		HandleEvent(Fake);
+	}
+	else if (What == TEXT("dev"))
+	{
+		// What other streamers see when the author visits; does nothing for anyone else
+		bDeveloperGreeted = false;
+		NoteDeveloper(Event.GetEconomyKey(), Event.DisplayName, false);
+	}
 	else if (const FChatEffect* Effect = Effects.Find(What))
 	{
 		if (!ExecuteEffect(*Effect, Event.GetEconomyKey(), Event.DisplayName, AmountText))
@@ -709,7 +726,7 @@ void UChatControlSubsystem::HandleTestCommand(const FChatEvent& Event, const FSt
 	}
 	else
 	{
-		Announce(Tr(TEXT("[test] chips [N], bits [N], sub, gifts [N], raid [N], welcome, autochaos, or an effect name"), TEXT("[тест] chips [N], bits [N], sub, gifts [N], raid [N], welcome, autochaos или название эффекта")));
+		Announce(Tr(TEXT("[test] chips [N], bits [N], sub, gifts [N], raid [N], welcome, autochaos, as <nick> <message>, or an effect name"), TEXT("[тест] chips [N], bits [N], sub, gifts [N], raid [N], welcome, autochaos, as <ник> <сообщение> или название эффекта")));
 	}
 }
 

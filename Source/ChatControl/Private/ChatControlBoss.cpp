@@ -13,6 +13,9 @@
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Components/WidgetComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
+#include "Materials/MaterialInterface.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SBorder.h"
@@ -105,6 +108,26 @@ namespace
 
 	const TCHAR* const TitanKey = TEXT("system:titan");
 
+	/** A game mesh strapped on the boss, Size centimeters along its longest side; no collision */
+	UStaticMeshComponent* AddJetpackPart(APawn* Pawn, const TCHAR* MeshPath, const FVector& Location, const FRotator& Rotation, float Size)
+	{
+		UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr, MeshPath);
+		if (!Mesh)
+		{
+			UE_LOG(LogChatControl, Warning, TEXT("Titan jetpack: mesh not found: %s"), MeshPath);
+			return nullptr;
+		}
+		UStaticMeshComponent* Part = NewObject<UStaticMeshComponent>(Pawn);
+		Part->SetStaticMesh(Mesh);
+		Part->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Part->SetCastShadow(false);
+		Part->SetupAttachment(Pawn->GetRootComponent());
+		Part->SetRelativeLocationAndRotation(Location, Rotation);
+		Part->SetRelativeScale3D(FVector(Size / FMath::Max(1.0, 2.0 * Mesh->GetBounds().BoxExtent.GetMax())));
+		Part->RegisterComponent();
+		return Part;
+	}
+
 	/** Ground on a ring around the player, traced from above; no fit test, for small static things like nests */
 	bool FindGroundNear(UWorld* World, const AActor* Player, float RadiusMin, float RadiusMax, FVector& OutLocation)
 	{
@@ -149,7 +172,7 @@ namespace
 	}
 }
 
-bool UChatControlSubsystem::StartTitan(const FString& ViewerKey, const FString& ViewerName, const FChatEffectSettings& Effect, const FString& BossId)
+bool UChatControlSubsystem::StartTitan(const FString& ViewerKey, const FString& ViewerName, const FChatEffectSettings& Effect, const FString& TestPicks)
 {
 	if (BossFight.bActive || IsInSafeZone() || !FindPlayer())
 	{
@@ -157,10 +180,12 @@ bool UChatControlSubsystem::StartTitan(const FString& ViewerKey, const FString& 
 	}
 
 	// Pick the boss: by id for "!test titan crabs", otherwise weighted random
+	TArray<FString> Picks;
+	TestPicks.ParseIntoArrayWS(Picks);
 	int32 Type = INDEX_NONE;
 	for (int32 i = 0; i < UE_ARRAY_COUNT(BossTypes); ++i)
 	{
-		if (!BossId.IsEmpty() && BossId.Equals(BossTypes[i].Id, ESearchCase::IgnoreCase))
+		if (Picks.ContainsByPredicate([&](const FString& Pick) { return Pick.Equals(BossTypes[i].Id, ESearchCase::IgnoreCase); }))
 		{
 			Type = i;
 		}
@@ -182,18 +207,23 @@ bool UChatControlSubsystem::StartTitan(const FString& ViewerKey, const FString& 
 	}
 	const FBossType& Boss = BossTypes[Type];
 
-	// 0..Amount random traits, at least one
+	// 0..Amount random traits, at least one; "!test titan queen jetpack" picks them instead
 	uint32 Traits = 0;
 	TArray<const FBossTraitInfo*> Pool;
+	TArray<const FBossTraitInfo*> Picked;
 	for (const FBossTraitInfo& Info : BossTraits)
 	{
+		if (Picks.ContainsByPredicate([&Info](const FString& Pick) { return FString(Info.English).Contains(Pick); }))
+		{
+			Picked.Add(&Info);
+			Traits |= Info.Trait;
+		}
 		if (Boss.Kind != EBossKind::Peaceful || Info.bPeaceful)
 		{
 			Pool.Add(&Info);
 		}
 	}
-	const int32 TraitCount = FMath::RandRange(1, FMath::Clamp(Effect.Amount, 1, 3));
-	TArray<const FBossTraitInfo*> Picked;
+	const int32 TraitCount = Picked.Num() > 0 ? 0 : FMath::RandRange(1, FMath::Clamp(Effect.Amount, 1, 3));
 	for (int32 i = 0; i < TraitCount && Pool.Num() > 0; ++i)
 	{
 		const FBossTraitInfo* Info = Pool[FMath::RandRange(0, Pool.Num() - 1)];
@@ -266,7 +296,7 @@ void UChatControlSubsystem::SpawnTitan()
 			RunDelayed(3.f, [WeakSelf] { if (WeakSelf.IsValid()) { WeakSelf->SpawnTitan(); } });
 			return;
 		}
-		Announce(FText::Format(Tr(TEXT("{0} found no room to land and left."), TEXT("{0} не нашёл(ла) места и ушёл(ла).")), FText::FromString(BossFight.Title)));
+		Announce(FText::Format(Tr(TEXT("{0} found no room to land and left."), TEXT("{0}: титану негде приземлиться, он уходит.")), FText::FromString(BossFight.Title)));
 		EndBossFight(false);
 		return;
 	}
@@ -320,10 +350,10 @@ void UChatControlSubsystem::SpawnTitan()
 	ProvokeCreature(Pawn, Player);
 	AttachBossBar(Pawn);
 
-	Announce(FText::Format(Tr(TEXT("{0} is here! Defeat it before it defeats you."), TEXT("{0} уже здесь! Победи, пока он не победил тебя.")), FText::FromString(BossFight.Title)));
+	Announce(FText::Format(Tr(TEXT("{0} is here! Defeat it before it defeats you."), TEXT("{0} уже здесь! Бей первым!")), FText::FromString(BossFight.Title)));
 	if (Boss.Kind == EBossKind::Peaceful)
 	{
-		Announce(Tr(TEXT("It carries loot - but it stomps anyone who gets too close!"), TEXT("Он несёт лут, но топчет всех, кто подойдёт близко!")));
+		Announce(Tr(TEXT("It carries loot - but it stomps anyone who gets too close!"), TEXT("Титан несёт лут, но топчет всех, кто подойдёт близко!")));
 	}
 	// Traits that change the world for the whole fight
 	auto RunWorldEffect = [this](const TCHAR* EffectId)
@@ -335,11 +365,33 @@ void UChatControlSubsystem::SpawnTitan()
 	};
 	if (BossFight.Traits & Radioactive)
 	{
-		Announce(Tr(TEXT("It glows with radiation - keep your distance!"), TEXT("Он фонит радиацией - держи дистанцию!")));
+		Announce(Tr(TEXT("It glows with radiation - keep your distance!"), TEXT("От титана фонит радиацией - держи дистанцию!")));
 	}
 	if (BossFight.Traits & Jetpack)
 	{
-		Announce(Tr(TEXT("It wears a jetpack - watch the sky!"), TEXT("У него реактивный ранец - следи за небом!")));
+		Announce(Tr(TEXT("It wears a jetpack - watch the sky!"), TEXT("У титана реактивный ранец - следи за небом!")));
+		BossFight.NextJetTime = Now + 5.0;
+		const ACharacter* Character = Cast<ACharacter>(Pawn);
+		if (const UCapsuleComponent* Capsule = Character ? Character->GetCapsuleComponent() : nullptr)
+		{
+			float BodyRadius = 100.f, BodyHalfHeight = 100.f;
+			Capsule->GetUnscaledCapsuleSize(BodyRadius, BodyHalfHeight);
+			AddJetpackPart(Pawn, TEXT("/Game/FactoryGame/Equipment/JetPack/Mesh/Jetpack_Groundmesh.Jetpack_Groundmesh"),
+				FVector(-BodyRadius * 0.3f, 0.f, BodyHalfHeight + 20.f), FRotator::ZeroRotator, FMath::Max(120.f, BodyRadius * 1.4f));
+			UMaterialInterface* FlameMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/FactoryGame/VFX/Vehicles/Drone/MI/MI_Thruster_Drone_01.MI_Thruster_Drone_01"));
+			for (const float Side : { -1.f, 1.f })
+			{
+				UStaticMeshComponent* Flame = AddJetpackPart(Pawn, TEXT("/Game/FactoryGame/VFX/Mesh/SM_VFX_Thruster_01.SM_VFX_Thruster_01"),
+					FVector(-BodyRadius * 0.3f, Side * BodyRadius * 0.4f, BodyHalfHeight - 40.f), FRotator::ZeroRotator, FMath::Max(150.f, BodyRadius * 1.5f));
+				if (Flame)
+				{
+					Flame->SetMaterial(0, FlameMaterial);
+					Flame->SetVisibility(false);
+					BossFight.JetFlames.Add(Flame);
+				}
+			}
+			UE_LOG(LogChatControl, Log, TEXT("Titan jetpack: %d flames, flame material %s"), BossFight.JetFlames.Num(), FlameMaterial ? TEXT("found") : TEXT("not found"));
+		}
 	}
 	if (BossFight.Traits & Nocturnal)
 	{
@@ -442,19 +494,19 @@ void UChatControlSubsystem::TickBoss(double Now)
 	if (bKilled)
 	{
 		const FVector LootLocation = Boss ? Boss->GetActorLocation() : Player ? Player->GetActorLocation() + Player->GetActorForwardVector() * 300.f : FVector::ZeroVector;
-		Announce(FText::Format(Tr(TEXT("VICTORY! {0} is defeated!"), TEXT("ПОБЕДА! {0} повержен(а)!")), FText::FromString(BossFight.Title)));
+		Announce(FText::Format(Tr(TEXT("VICTORY! {0} is defeated!"), TEXT("ПОБЕДА! Титан повержен: {0}!")), FText::FromString(BossFight.Title)));
 		const int32 Loot = Type.Kind == EBossKind::Peaceful ? 10 : 6;
 		if (Player && ChatEffects::DropLootCrate(GetGameWorld(), Player, LootLocation + FVector(0, 0, 100.f), Loot, 0.6f))
 		{
-			Announce(Tr(TEXT("It dropped a crate full of loot!"), TEXT("Из него выпал ящик с лутом!")));
+			Announce(Tr(TEXT("It dropped a crate full of loot!"), TEXT("Из титана выпал ящик с лутом!")));
 		}
 		if (Settings.TitanRewardChips > 0)
 		{
 			const int32 Paid = Economy.PayActiveViewers(Now, Settings.ActiveWindowSeconds, Settings.TitanRewardChips);
 			if (Paid > 0)
 			{
-				Announce(FText::Format(Tr(TEXT("Chat celebrates: {0} viewers get {1} chips each!"), TEXT("Чат празднует: {0} зрителей получают по {1} чипов!")),
-					FText::AsNumber(Paid), FText::AsNumber(Settings.TitanRewardChips)));
+				Announce(FText::Format(Tr(TEXT("Chat celebrates: every active viewer gets {0} chips!"), TEXT("Чат празднует: каждый активный зритель получает {0} чипов!")),
+					FText::AsNumber(Settings.TitanRewardChips)));
 			}
 		}
 		EndBossFight(false);
@@ -462,7 +514,7 @@ void UChatControlSubsystem::TickBoss(double Now)
 	}
 	if (Player && !Player->IsAliveAndWell())
 	{
-		Announce(FText::Format(Tr(TEXT("{0} defeated the streamer! {1} gets {2} chips for the summon."), TEXT("{0} победил(а) стримера! {1} получает {2} чипов за призыв.")),
+		Announce(FText::Format(Tr(TEXT("{0} defeated the streamer! {1} gets {2} chips for the summon."), TEXT("Стример проиграл: {0}! {1} получает {2} чипов за призыв.")),
 			FText::FromString(BossFight.Title), FText::FromString(BossFight.ViewerName), FText::AsNumber(Settings.TitanCallerChips)));
 		if (Settings.TitanCallerChips > 0 && !BossFight.ViewerKey.StartsWith(TEXT("system:")))
 		{
@@ -474,7 +526,7 @@ void UChatControlSubsystem::TickBoss(double Now)
 	}
 	if (Now >= BossFight.EndTime)
 	{
-		Announce(FText::Format(Tr(TEXT("{0} got bored and left."), TEXT("{0} заскучал(а) и ушёл(ла).")), FText::FromString(BossFight.Title)));
+		Announce(FText::Format(Tr(TEXT("{0} got bored and left."), TEXT("{0}: титану стало скучно, он уходит.")), FText::FromString(BossFight.Title)));
 		EndBossFight(true);
 		return;
 	}
@@ -566,7 +618,7 @@ void UChatControlSubsystem::TickBoss(double Now)
 		}
 
 		// Charge: a running jump straight at the player
-		if (Beast && Now >= BossFight.NextChargeTime && Distance > 800.f && Distance < 3500.f && Beast->GetCharacterMovement() && Beast->GetCharacterMovement()->IsMovingOnGround())
+		if (Beast && !BossFight.bJetFlying && Now >= BossFight.NextChargeTime && Distance > 800.f && Distance < 3500.f && Beast->GetCharacterMovement() && Beast->GetCharacterMovement()->IsMovingOnGround())
 		{
 			BossFight.NextChargeTime = Now + (BossFight.Stage >= 3 ? 6.0 : 9.0);
 			const FVector Toward = (Player->GetActorLocation() - Boss->GetActorLocation()).GetSafeNormal2D();
@@ -580,9 +632,9 @@ void UChatControlSubsystem::TickBoss(double Now)
 			BossFight.bLeaping = false;
 			Shockwave(Player, Boss->GetActorLocation(), Radius + 900.f, 30.f * DamageScale, 1300.f, Boss);
 		}
-		else if (Movement && !BossFight.bLeaping && (BossFight.Stage >= 2 || (BossFight.Traits & Jetpack)) && Now >= BossFight.NextLeapTime && Distance < 4000.f && Movement->IsMovingOnGround())
+		else if (Movement && !BossFight.bLeaping && !BossFight.bJetFlying && BossFight.Stage >= 2 && Now >= BossFight.NextLeapTime && Distance < 4000.f && Movement->IsMovingOnGround())
 		{
-			BossFight.NextLeapTime = Now + ((BossFight.Traits & Jetpack) ? 7.0 : BossFight.Stage >= 3 ? 10.0 : 14.0);
+			BossFight.NextLeapTime = Now + (BossFight.Stage >= 3 ? 10.0 : 14.0);
 			BossFight.bLeaping = true;
 			BossFight.LeapStartTime = Now;
 			// About 1.3 s in the air: horizontal speed covers the distance, vertical speed brings it back down
@@ -603,26 +655,65 @@ void UChatControlSubsystem::TickBoss(double Now)
 			Player->GetHealthComponent()->TakeDamage(Player, Damage, GetDefault<UDamageType>(), nullptr, Boss);
 		}
 	}
-	if ((BossFight.Traits & Jetpack) && Type.Kind != EBossKind::Peaceful && Player)
+	if ((BossFight.Traits & Jetpack) && Player)
 	{
-		// Jetpack: a high arc that lands next to the player with a shockwave
+		// Jetpack: flies up and over to the player and lands next to them with a shockwave
 		ACharacter* Flyer = Cast<ACharacter>(Boss);
 		UCharacterMovementComponent* Movement = Flyer ? Flyer->GetCharacterMovement() : nullptr;
-		if (Movement && BossFight.bLeaping && Now - BossFight.LeapStartTime > 0.4 && Movement->IsMovingOnGround())
+		auto ShowFlames = [this](bool bShow)
 		{
-			BossFight.bLeaping = false;
-			Shockwave(Player, Boss->GetActorLocation(), 900.f, 20.f * (Settings.Difficulty >= 3 ? 1.5f : Settings.Difficulty <= 1 ? 0.6f : 1.f), 1100.f, Boss);
+			for (const TWeakObjectPtr<UStaticMeshComponent>& Flame : BossFight.JetFlames)
+			{
+				if (Flame.IsValid())
+				{
+					Flame->SetVisibility(bShow);
+				}
+			}
+		};
+		// !dance freezes creatures with a tiny time dilation; a frozen boss stays on the ground
+		if (Movement && !BossFight.bJetFlying && Now >= BossFight.NextJetTime && Boss->CustomTimeDilation >= 0.01f)
+		{
+			BossFight.bJetFlying = true;
+			BossFight.JetStartTime = Now;
+			BossFight.JetFrom = Boss->GetActorLocation();
+			const float Distance = FVector::Dist2D(Player->GetActorLocation(), BossFight.JetFrom);
+			BossFight.JetDuration = FMath::Clamp(Distance / 1500.f, 2.f, 4.5f);
+			if (AAIController* Controller = Cast<AAIController>(Boss->GetController()))
+			{
+				Controller->StopMovement();
+			}
+			ShowFlames(true);
+			UE_LOG(LogChatControl, Log, TEXT("Titan jetpack: takes off, %.0f m to the player, movement mode was %d"), Distance / 100.f, static_cast<int32>(Movement->MovementMode));
 		}
-		else if (Movement && !BossFight.bLeaping && Now >= BossFight.NextLeapTime && Movement->IsMovingOnGround()
-			&& FVector::Dist2D(Player->GetActorLocation(), Boss->GetActorLocation()) < 4000.f)
+		if (Movement && BossFight.bJetFlying)
 		{
-			BossFight.NextLeapTime = Now + (BossFight.Stage >= 3 ? 5.0 : 8.0);
-			BossFight.bLeaping = true;
-			BossFight.LeapStartTime = Now;
-			const float Gravity = FMath::Abs(Movement->GetGravityZ());
-			const float AirTime = 1.6f;
-			const FVector Toward = Player->GetActorLocation() - Boss->GetActorLocation();
-			Flyer->LaunchCharacter(FVector(Toward.X, Toward.Y, 0.f) / AirTime + FVector(0, 0, 0.5f * Gravity * AirTime), true, true);
+			float Radius = 100.f, HalfHeight = 100.f;
+			Flyer->GetCapsuleComponent()->GetScaledCapsuleSize(Radius, HalfHeight);
+			const float Alpha = FMath::Clamp(static_cast<float>((Now - BossFight.JetStartTime) / BossFight.JetDuration), 0.f, 1.f);
+			if (Alpha < 0.7f)
+			{
+				// Follows the player until it starts coming down, which leaves time to dodge
+				const FVector Away = (BossFight.JetFrom - Player->GetActorLocation()).GetSafeNormal2D();
+				BossFight.JetTo = Player->GetActorLocation() + Away * (Radius + 350.f)
+					+ FVector(0.f, 0.f, HalfHeight - Player->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() + 30.f);
+			}
+			FVector Position = FMath::Lerp(BossFight.JetFrom, BossFight.JetTo, Alpha);
+			Position.Z += 1500.f * FMath::Sin(PI * Alpha);
+			if (Movement->MovementMode != MOVE_Flying)
+			{
+				Movement->SetMovementMode(MOVE_Flying);
+			}
+			Movement->StopMovementImmediately();
+			Boss->SetActorLocationAndRotation(Position, FRotator(0.f, (Player->GetActorLocation() - Position).Rotation().Yaw, 0.f));
+			if (Alpha >= 1.f)
+			{
+				BossFight.bJetFlying = false;
+				BossFight.NextJetTime = Now + (BossFight.Stage >= 3 ? 5.0 : 8.0);
+				Movement->SetMovementMode(MOVE_Falling);
+				ShowFlames(false);
+				Shockwave(Player, Position, Radius + 900.f, 20.f * (Settings.Difficulty >= 3 ? 1.5f : Settings.Difficulty <= 1 ? 0.6f : 1.f), 1100.f, Boss);
+				UE_LOG(LogChatControl, Log, TEXT("Titan jetpack: landed %.0f m from the player"), FVector::Dist(Position, Player->GetActorLocation()) / 100.f);
+			}
 		}
 	}
 	const bool bPeriodicSummons = (BossFight.Traits & Summoning) || Type.Kind == EBossKind::Hatcher;
@@ -787,6 +878,14 @@ void UChatControlSubsystem::EndBossFight(bool bDestroyBoss)
 	if (bDestroyBoss && BossFight.Boss.IsValid())
 	{
 		BossFight.Boss->Destroy();
+	}
+	else if (BossFight.bJetFlying)
+	{
+		// The fight ended in the air: gravity takes over again
+		if (ACharacter* Flyer = Cast<ACharacter>(BossFight.Boss.Get()); Flyer && Flyer->GetCharacterMovement())
+		{
+			Flyer->GetCharacterMovement()->SetMovementMode(MOVE_Falling);
+		}
 	}
 	BossFight = FBossFight();
 }

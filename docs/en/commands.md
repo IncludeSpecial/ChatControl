@@ -117,7 +117,8 @@ with a Jetpack (flies at you every few seconds and lands with a shockwave).
 | Command | What it does |
 |---|---|
 | `!test <effect> [text]` | Runs any effect for free, e.g. `!test boss`, `!test sign hello` |
-| `!test titan <boss>` | A titan fight with a chosen boss: `hogking`, `cliff`, `nuclear`, `queen`, `stinger`, `green`, `fire`, `sand`, `deep`, `crabs`, `giraffe`, `beetle`, `strider` |
+| `!test titan <boss> <traits>` | A titan fight with a chosen boss: `hogking`, `cliff`, `nuclear`, `queen`, `stinger`, `green`, `fire`, `sand`, `deep`, `crabs`, `giraffe`, `beetle`, `strider`; and traits: `armored`, `swift`, `colossal`, `undying`, `summoning`, `nocturnal`, `misty`, `sparking`, `bloodthirsty`, `rabid`, `radioactive`, `jetpack`. Both are optional |
+| `!test as <nick> <message>` | A plain viewer says it, e.g. `!test as bob !chips`. The viewer stays in the chip list |
 | `!test chips N` | Gives you N chips |
 | `!test bits N`, `!test sub`, `!test gifts N`, `!test raid N` | Simulates bits, a sub, gifted subs, a raid |
 | `!test welcome` | Shows the greeting new viewers get |

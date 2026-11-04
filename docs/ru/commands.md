@@ -118,7 +118,8 @@
 | Команда | Что делает |
 |---|---|
 | `!test <эффект> [текст]` | Любой эффект бесплатно, например `!test boss`, `!test sign привет` |
-| `!test titan <босс>` | Бой с выбранным боссом: `hogking`, `cliff`, `nuclear`, `queen`, `stinger`, `green`, `fire`, `sand`, `deep`, `crabs`, `giraffe`, `beetle`, `strider` |
+| `!test titan <босс> <свойства>` | Бой с выбранным боссом: `hogking`, `cliff`, `nuclear`, `queen`, `stinger`, `green`, `fire`, `sand`, `deep`, `crabs`, `giraffe`, `beetle`, `strider`; и свойствами: `armored`, `swift`, `colossal`, `undying`, `summoning`, `nocturnal`, `misty`, `sparking`, `bloodthirsty`, `rabid`, `radioactive`, `jetpack`. И то и другое необязательно |
+| `!test as <ник> <сообщение>` | Сообщение от обычного зрителя, например `!test as bob !chips`. Зритель остаётся в списке чипов |
 | `!test chips N` | Выдать себе N чипов |
 | `!test bits N`, `!test sub`, `!test gifts N`, `!test raid N` | Имитация битсов, саба, подарочных сабов, рейда |
 | `!test welcome` | Приветствие, которое получают новые зрители |

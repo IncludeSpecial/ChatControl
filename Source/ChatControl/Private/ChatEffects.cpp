@@ -914,7 +914,7 @@ TMap<FString, FChatEffect> ChatEffects::CreateAll()
 
 	Add(TEXT("titan"), true, [](const FChatEffectContext& Ctx)
 	{
-		// Args picks a boss for testing: "!test titan crabs"
+		// Args picks the boss and traits for testing: "!test titan crabs radioactive"
 		return Ctx.Subsystem->StartTitan(Ctx.ViewerKey, Ctx.ViewerName, *Ctx.Settings, Ctx.Args.TrimStartAndEnd());
 	});
 
