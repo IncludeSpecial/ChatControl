@@ -22,7 +22,7 @@ Twitch needs no token or login. YouTube is optional and needs a free API key.
 | All commands and effects with prices | [Commands](docs/en/commands.md) | [Команды](docs/ru/commands.md) |
 | Every setting and the files on disk | [Settings](docs/en/settings.md) | [Настройки](docs/ru/settings.md) |
 | Troubleshooting and questions | [FAQ](docs/en/faq.md) | [Вопросы](docs/ru/faq.md) |
-| What changed | [Changelog](CHANGELOG.md) | |
+| What changed | [Changelog](CHANGELOG.md) | [История изменений](CHANGELOG.ru.md) |
 
 ## Features
 

@@ -22,7 +22,7 @@
 | Все команды и эффекты с ценами | [Команды](docs/ru/commands.md) | [Commands](docs/en/commands.md) |
 | Все настройки и файлы на диске | [Настройки](docs/ru/settings.md) | [Settings](docs/en/settings.md) |
 | Проблемы и вопросы | [Вопросы](docs/ru/faq.md) | [FAQ](docs/en/faq.md) |
-| Что изменилось | | [Changelog](CHANGELOG.md) |
+| Что изменилось | [История изменений](CHANGELOG.ru.md) | [Changelog](CHANGELOG.md) |
 
 ## Возможности
 

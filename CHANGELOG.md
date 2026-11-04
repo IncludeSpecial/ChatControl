@@ -1,5 +1,7 @@
 # Changelog
 
+[На русском](CHANGELOG.ru.md)
+
 ## 0.1.4
 
 ### New
